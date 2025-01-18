@@ -1,0 +1,4 @@
+#ignore all except .gitignore
+!.gitignore
+*.txt
+*.csv
