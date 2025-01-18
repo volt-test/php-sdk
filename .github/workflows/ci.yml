@@ -49,20 +49,15 @@ jobs:
         - name: Setup PHP (Windows)
           if: matrix.os == 'windows-latest'
           run: |
-            choco install php --version=8.2
-            refreshenv
-            php -v
-
-        - name: Install Composer (Windows)
-          if: matrix.os == 'windows-latest'
-          run: |
-            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-            php composer-setup.php
-            php -r "unlink('composer-setup.php');"
-            mkdir -p C:\tools\composer
-            move composer.phar C:\tools\composer\composer
-            echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
+              refreshenv
+              php -v
           shell: pwsh
+
+        - name: Install dependencies (Windows)
+          if: matrix.os == 'windows-latest'
+          run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
+          shell: bash
 
         - name: Install Composer (Unix)
           if: matrix.os != 'windows-latest'
