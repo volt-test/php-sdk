@@ -105,10 +105,8 @@ class VoltTest
         return $scenario;
     }
 
-    public function run(bool $streamOutput = true): TestResult
+    public function run(bool $streamOutput = false): TestResult
     {
-        $voltTestPath = Platform::getBinaryPath();
-        // Prepare final config
         $config = $this->prepareConfig();
 
         $output = $this->processManager->execute($config, $streamOutput);
