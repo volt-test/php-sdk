@@ -10,6 +10,7 @@ class Platform
         'darwin-amd64' => 'darwin-amd64/volt-test',
         'darwin-arm64' => 'darwin-arm64/volt-test',
         'windows-amd64' => 'windows-amd64/volt-test.exe',
+        'windows-AMD64' => 'windows-amd64/volt-test.exe',
     ];
 
     public static function installBinary($testing = false): void
