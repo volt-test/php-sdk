@@ -16,7 +16,6 @@
     "issues": "https://github.com/volt-test/php-sdk/issues",
     "source": "https://github.com/volt-test/php-sdk/"
     },
-  "version": "0.0.1",
   "authors": [
     {
       "name": "elwafa",
