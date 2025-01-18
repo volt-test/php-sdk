@@ -8,6 +8,7 @@ class Platform
     private const SUPPORTED_PLATFORMS = [
         'linux-amd64' => 'linux-amd64/volt-test',
         'darwin-amd64' => 'darwin-amd64/volt-test',
+        'darwin-arm64' => 'darwin-arm64/volt-test',
         'windows-amd64' => 'windows-amd64/volt-test.exe',
     ];
 
