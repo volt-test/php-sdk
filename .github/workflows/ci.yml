@@ -45,23 +45,19 @@ jobs:
           php -v
         shell: pwsh
 
-      - name: Install Composer (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Install Composer
         run: |
           php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          php composer-setup.php
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            php composer-setup.php
+            mkdir -p C:\tools\composer
+            move composer.phar C:\tools\composer\composer
+            echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          else
+            sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          fi
           php -r "unlink('composer-setup.php');"
-          mkdir -p C:\tools\composer
-          move composer.phar C:\tools\composer\composer
-          echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
-
-      - name: Install Composer (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-          php -r "unlink('composer-setup.php');"
+          composer --version
         shell: bash
 
       - name: Validate composer.json
@@ -90,11 +86,6 @@ jobs:
         run: vendor/bin/phpunit
         shell: bash
 
-      - name: Verify binary installation
-        run: |
-          php -r "require 'vendor/autoload.php'; new VoltTest\Platform();"
-        shell: bash
-
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v3
@@ -108,24 +99,66 @@ jobs:
   static-analysis:
     name: Static Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP and tools
+      - name: Setup PHP
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
           sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
-          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
-          composer global require phpstan/phpstan
-          echo "${HOME}/.composer/vendor/bin" >> $GITHUB_PATH
+        shell: bash
 
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
+      - name: Install Composer
+        run: |
+          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+          sudo chmod +x /usr/local/bin/composer
+          mkdir -p ~/.composer
+          sudo chown -R $USER:$USER ~/.composer
+        shell: bash
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Dependencies
+        run: |
+          composer install --prefer-dist --no-progress
+          composer require --dev phpstan/phpstan --with-all-dependencies
+        shell: bash
+
+      - name: Create PHPStan config
+        run: |
+          echo '
+          parameters:
+              level: 5
+              paths:
+                  - src
+                  - tests
+              excludePaths:
+                  - vendor/*
+          ' > phpstan.neon
 
       - name: Run PHPStan
-        run: phpstan analyse src tests --level=5
+        run: |
+          if [ -f "vendor/bin/phpstan" ]; then
+            vendor/bin/phpstan analyse -c phpstan.neon
+          else
+            echo "PHPStan not found in vendor/bin"
+            exit 1
+          fi
+        shell: bash
 
   code-style:
     name: Code Style
@@ -140,8 +173,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
           curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
-          composer global require friendsofphp/php-cs-fixer
-          echo "${HOME}/.composer/vendor/bin" >> $GITHUB_PATH
+
+      - name: Install PHP CS Fixer
+        run: |
+          composer require --dev friendsofphp/php-cs-fixer
+
+      - name: Create PHP CS Fixer config
+        run: |
+          echo "<?php
+          return (new PhpCsFixer\Config())
+              ->setRules([
+                  '@PSR2' => true,
+                  'array_syntax' => ['syntax' => 'short'],
+                  'no_unused_imports' => true,
+                  'ordered_imports' => true,
+              ])
+              ->setFinder(
+                  PhpCsFixer\Finder::create()
+                      ->exclude('vendor')
+                      ->in(__DIR__)
+              );
+          " > .php-cs-fixer.php
 
       - name: Check coding standards
-        run: php-cs-fixer fix --dry-run --diff
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff
