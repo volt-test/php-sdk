@@ -61,10 +61,14 @@ jobs:
       - name: Install Composer (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          php -r "unlink('composer-setup.php');"
           sudo chmod +x /usr/local/bin/composer
           mkdir -p ~/.composer
-          sudo chown -R $USER:$USER ~/.composer
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo chown -R $USER:$USER ~/.composer
+          fi
         shell: bash
 
       - name: Get Composer Cache Directory
