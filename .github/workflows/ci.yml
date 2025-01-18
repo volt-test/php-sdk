@@ -10,88 +10,99 @@ jobs:
   test:
     name: PHP Tests - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
 
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
-      steps:
-        - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-        # PHP installation and setup using built-in tools
-        - name: Setup PHP (Ubuntu)
-          if: matrix.os == 'ubuntu-latest'
-          run: |
-            sudo add-apt-repository ppa:ondrej/php
-            sudo apt-get update
-            sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
-            php -v
-          shell: bash
+      # PHP installation and setup using built-in tools
+      - name: Setup PHP (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo add-apt-repository ppa:ondrej/php
+          sudo apt-get update
+          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
+          php -v
+        shell: bash
 
-        - name: Setup PHP (macOS)
-          if: matrix.os == 'macos-latest'
-          run: |
-            brew install php@8.2
-            brew link php@8.2 --force
-            php -v
-          shell: bash
+      - name: Setup PHP (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install php@8.2
+          brew link php@8.2 --force
+          php -v
+        shell: bash
 
-        - name: Setup PHP (Windows)
-          if: matrix.os == 'windows-latest'
-          run: |
-              choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
-              refreshenv
-              php -v
-          shell: pwsh
+      - name: Setup PHP (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
+          refreshenv
+          php -v
+        shell: pwsh
 
-        - name: Install dependencies (Windows)
-          if: matrix.os == 'windows-latest'
-          run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
-          shell: bash
+      - name: Install Composer (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          php composer-setup.php
+          php -r "unlink('composer-setup.php');"
+          mkdir -p C:\tools\composer
+          move composer.phar C:\tools\composer\composer
+          echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
 
-        - name: Install Composer (Unix)
-          if: matrix.os != 'windows-latest'
-          run: |
-            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-            sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-            php -r "unlink('composer-setup.php');"
-          shell: bash
+      - name: Install Composer (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+          sudo chmod +x /usr/local/bin/composer
+          mkdir -p ~/.composer
+          sudo chown -R $USER:$USER ~/.composer
+        shell: bash
 
-        - name: Validate composer.json
-          run: composer validate
-          shell: bash
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        shell: bash
 
-        - name: Cache Composer packages
-          uses: actions/cache@v3
-          with:
-            path: vendor
-            key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-            restore-keys: |
-              ${{ runner.os }}-php-
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
 
-        - name: Install dependencies
-          run: composer install --prefer-dist --no-progress
-          shell: bash
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
+        shell: bash
 
-        - name: Run test suite
-          run: vendor/bin/phpunit
-          shell: bash
+      - name: Install dependencies (Unix)
+        if: matrix.os != 'windows-latest'
+        run: composer install --prefer-dist --no-progress
+        shell: bash
 
-        - name: Verify binary installation
-          run: |
-            php -r "require 'vendor/autoload.php'; new VoltTest\Platform();"
-          shell: bash
+      - name: Run test suite
+        run: vendor/bin/phpunit
+        shell: bash
 
-        - name: Upload test artifacts
-          if: always()
-          uses: actions/upload-artifact@v3
-          with:
-            name: test-results-${{ matrix.os }}
-            path: |
-              ./build/logs
-              ./phpunit.xml
-              ./coverage.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            ./build/logs
+            ./phpunit.xml
+            ./coverage.xml
 
   static-analysis:
     name: Static Analysis
@@ -160,20 +171,44 @@ jobs:
   code-style:
     name: Code Style
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP and tools
+      - name: Setup PHP
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
           sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
-          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+        shell: bash
 
-      - name: Install PHP CS Fixer
+      - name: Install Composer
         run: |
-          composer require --dev friendsofphp/php-cs-fixer
+          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+          sudo chmod +x /usr/local/bin/composer
+          mkdir -p ~/.composer
+          sudo chown -R $USER:$USER ~/.composer
+        shell: bash
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Dependencies
+        run: |
+          composer install --prefer-dist --no-progress
+          composer require --dev friendsofphp/php-cs-fixer --with-all-dependencies
+        shell: bash
 
       - name: Create PHP CS Fixer config
         run: |
