@@ -50,6 +50,7 @@ class PlatformTest extends TestCase
         $this->assertContains($result, [
             'linux-amd64',
             'darwin-amd64',
+            'darwin-arm64',
             'windows-amd64',
         ], "Detected platform $result is not in the supported platforms list");
     }
