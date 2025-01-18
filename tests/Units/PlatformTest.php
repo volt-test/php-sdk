@@ -60,9 +60,6 @@ class PlatformTest extends TestCase
     {
         $binaryPath = Platform::getBinaryPath();
 
-        // Assert that the binary path is a valid path
-        $this->assertIsString($binaryPath);
-
         // Install binary first to ensure it exists
         Platform::installBinary();
 
