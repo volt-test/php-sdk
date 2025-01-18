@@ -16,85 +16,96 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
-    steps:
-      - uses: actions/checkout@v4
+    test:
+      name: PHP Tests - ${{ matrix.os }}
+      runs-on: ${{ matrix.os }}
 
-      # PHP installation and setup using built-in tools
-      - name: Setup PHP (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo add-apt-repository ppa:ondrej/php
-          sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
-          php -v
-        shell: bash
+      strategy:
+        fail-fast: false
+        matrix:
+          os: [ ubuntu-latest, windows-latest, macos-latest ]
 
-      - name: Setup PHP (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install php@8.2
-          brew link php@8.2 --force
-          php -v
-        shell: bash
+      steps:
+        - uses: actions/checkout@v4
 
-      - name: Setup PHP (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
-          refreshenv
-          php -v
-        shell: pwsh
+        # PHP installation and setup using built-in tools
+        - name: Setup PHP (Ubuntu)
+          if: matrix.os == 'ubuntu-latest'
+          run: |
+            sudo add-apt-repository ppa:ondrej/php
+            sudo apt-get update
+            sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
+            php -v
+          shell: bash
 
-      - name: Install Composer
-        run: |
-          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          if [ "$RUNNER_OS" == "Windows" ]; then
+        - name: Setup PHP (macOS)
+          if: matrix.os == 'macos-latest'
+          run: |
+            brew install php@8.2
+            brew link php@8.2 --force
+            php -v
+          shell: bash
+
+        - name: Setup PHP (Windows)
+          if: matrix.os == 'windows-latest'
+          run: |
+            choco install php --version=8.2
+            refreshenv
+            php -v
+
+        - name: Install Composer (Windows)
+          if: matrix.os == 'windows-latest'
+          run: |
+            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
             php composer-setup.php
+            php -r "unlink('composer-setup.php');"
             mkdir -p C:\tools\composer
             move composer.phar C:\tools\composer\composer
             echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          else
+          shell: pwsh
+
+        - name: Install Composer (Unix)
+          if: matrix.os != 'windows-latest'
+          run: |
+            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
             sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-          fi
-          php -r "unlink('composer-setup.php');"
-          composer --version
-        shell: bash
+            php -r "unlink('composer-setup.php');"
+          shell: bash
 
-      - name: Validate composer.json
-        run: composer validate
-        shell: bash
+        - name: Validate composer.json
+          run: composer validate
+          shell: bash
 
-      - name: Cache Composer packages
-        uses: actions/cache@v3
-        with:
-          path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-
+        - name: Cache Composer packages
+          uses: actions/cache@v3
+          with:
+            path: vendor
+            key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+            restore-keys: |
+              ${{ runner.os }}-php-
 
-      - name: Install dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
-        shell: bash
+        - name: Install dependencies
+          run: composer install --prefer-dist --no-progress
+          shell: bash
 
-      - name: Install dependencies (Unix)
-        if: matrix.os != 'windows-latest'
-        run: composer install --prefer-dist --no-progress
-        shell: bash
+        - name: Run test suite
+          run: vendor/bin/phpunit
+          shell: bash
 
-      - name: Run test suite
-        run: vendor/bin/phpunit
-        shell: bash
+        - name: Verify binary installation
+          run: |
+            php -r "require 'vendor/autoload.php'; new VoltTest\Platform();"
+          shell: bash
 
-      - name: Upload test artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-results-${{ matrix.os }}
-          path: |
-            ./build/logs
-            ./phpunit.xml
-            ./coverage.xml
+        - name: Upload test artifacts
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: test-results-${{ matrix.os }}
+            path: |
+              ./build/logs
+              ./phpunit.xml
+              ./coverage.xml
 
   static-analysis:
     name: Static Analysis
