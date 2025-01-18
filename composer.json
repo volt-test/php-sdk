@@ -1,0 +1,69 @@
+{
+  "name": "volt-test/php-sdk",
+  "description": "Volt Test PHP SDK - A performance testing tool for PHP applications",
+  "type": "library",
+  "keywords": [
+    "volt-test",
+    "php-sdk",
+    "performance-testing",
+    "load-testing",
+    "stress-testing",
+    "http"
+  ],
+  "homepage": "https://php.volt-test.com",
+  "license": "MIT",
+  "support": {
+    "issues": "https://github.com/volt-test/php-sdk/issues",
+    "source": "https://github.com/volt-test/php-sdk/"
+    },
+  "version": "0.0.1",
+  "authors": [
+    {
+      "name": "elwafa",
+      "email": "islam@volt-test.com"
+    }
+  ],
+  "require": {
+    "php": "^8.0",
+    "ext-json": "*",
+    "ext-pcntl": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "VoltTest\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "post-install-cmd": [
+      "VoltTest\\Platform::installBinary"
+    ],
+    "post-update-cmd": [
+      "VoltTest\\Platform::installBinary"
+    ],
+    "volt-test": [
+      "VoltTest\\Platform::installBinary"
+    ],
+    "test": "phpunit",
+    "cs": "PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff",
+    "cs-check": "PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --dry-run --diff",
+    "analyze": "phpstan analyze",
+    "check": [
+      "@cs-check",
+      "@analyze",
+      "@test"
+    ]
+  },
+  "config": {
+    "bin-dir": "vendor/bin"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.5",
+    "phpstan/phpstan": "^1.10",
+    "friendsofphp/php-cs-fixer": "^3.51"
+  }
+}
