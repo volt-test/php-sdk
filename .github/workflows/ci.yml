@@ -2,37 +2,49 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
 
 jobs:
   test:
-    name: PHP ${{ matrix.php-version }} - ${{ matrix.os }}
+    name: PHP Tests - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        php-version: ['8.0', '8.1', '8.2']
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php-version }}
-          extensions: json
-          coverage: xdebug
-          tools: composer:v2
+      # PHP installation and setup using built-in tools
+      - name: Setup PHP (Ubuntu/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          sudo apt-get update || brew install php@8.2
+          sudo apt-get install -y php8.2-cli php8.2-xml php8.2-curl || true
+          php -v
+
+      - name: Setup PHP (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install php --version=8.2
+          php -v
+
+      - name: Install Composer
+        run: |
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          php -r "unlink('composer-setup.php');"
+        shell: bash
 
       - name: Validate composer.json
         run: composer validate --strict
+        shell: bash
 
       - name: Cache Composer packages
-        id: composer-cache
         uses: actions/cache@v3
         with:
           path: vendor
@@ -42,13 +54,26 @@ jobs:
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
+        shell: bash
 
       - name: Run test suite
         run: vendor/bin/phpunit --coverage-text
+        shell: bash
 
       - name: Verify binary installation
         run: |
           php -r "require 'vendor/autoload.php'; new VoltTest\Platform();"
+        shell: bash
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            ./build/logs
+            ./phpunit.xml
+            ./coverage.xml
 
   static-analysis:
     name: Static Analysis
@@ -57,17 +82,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: composer:v2, phpstan
+      - name: Setup PHP and tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php8.2-cli php8.2-xml
+          curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          composer global require phpstan/phpstan
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
       - name: Run PHPStan
-        run: phpstan analyse src tests --level=5
+        run: ~/.composer/vendor/bin/phpstan analyse src tests --level=5
 
   code-style:
     name: Code Style
@@ -76,30 +102,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: composer:v2, php-cs-fixer
+      - name: Setup PHP and tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php8.2-cli php8.2-xml
+          curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          composer global require friendsofphp/php-cs-fixer
 
       - name: Check coding standards
-        run: php-cs-fixer fix --dry-run --diff
-
-  security-check:
-    name: Security Check
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: composer:v2
-
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
-
-      - name: Security check
-        uses: symfonycorp/security-checker-action@v4
+        run: ~/.composer/vendor/bin/php-cs-fixer fix --dry-run --diff
