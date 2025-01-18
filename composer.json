@@ -24,8 +24,10 @@
   ],
   "require": {
     "php": "^8.0",
-    "ext-json": "*",
-    "ext-pcntl": "*"
+    "ext-json": "*"
+  },
+  "suggest": {
+    "ext-pcntl": "For signal handling support on Unix-like systems"
   },
   "autoload": {
     "psr-4": {
