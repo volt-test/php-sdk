@@ -36,6 +36,7 @@ composer require volt-test/php-sdk
 ### Basic Usage
 
 ```php
+<?php
 use VoltTest\VoltTest;
 
 // Create a new test
