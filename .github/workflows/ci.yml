@@ -40,9 +40,10 @@ jobs:
       - name: Setup PHP (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          choco install php --version=8.2
+          choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
           refreshenv
           php -v
+        shell: pwsh
 
       - name: Install Composer (Windows)
         if: matrix.os == 'windows-latest'
@@ -75,7 +76,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-php-
 
-      - name: Install dependencies
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
+        shell: bash
+
+      - name: Install dependencies (Unix)
+        if: matrix.os != 'windows-latest'
         run: composer install --prefer-dist --no-progress
         shell: bash
 
