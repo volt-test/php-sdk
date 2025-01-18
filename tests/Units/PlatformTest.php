@@ -52,6 +52,7 @@ class PlatformTest extends TestCase
             'darwin-amd64',
             'darwin-arm64',
             'windows-amd64',
+            'windows-AMD64',
         ], "Detected platform $result is not in the supported platforms list");
     }
 
