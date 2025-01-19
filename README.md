@@ -30,45 +30,87 @@ For detailed documentation, visit [https://php.volt-test.com](https://php.volt-t
 ### Installation
 
 ```bash
-composer require volt-test/php-sdk
+git clone git@github.com:volt-test/php-sdk.git
+cd php-sdk
+composer install
 ```
 
 ### Basic Usage
-
+```bash
+touch test.php
+```
 ```php
+// test.php
 <?php
+require 'vendor/autoload.php';
+
+use VoltTest\DataSourceConfiguration;
 use VoltTest\VoltTest;
 
 // Create a new test
-$test = new VoltTest('API Load Test', 'Testing API endpoints under load');
+$test = new VoltTest(
+    'User Login Flow',
+    'Tests user authentication process'
+);
+// Configure test parameters
+$test
+    ->setVirtualUsers(1) // number of VUs (Virtual Users)
+//    ->setDuration('1s') // to run the test for 1 second
+    ->setHttpDebug(true); // to enable http debug mode remove it if you don't want to see the http debug
 
-// Configure the test
-$test->setVirtualUsers(10)
-    ->setDuration('1m')
-    ->setRampUp('10s')
-    ->setTarget('https://api.example.com');
+// Create login scenario
+$loginScenario = $test->scenario('User Login')
+    ->autoHandleCookies() // this will save cookies with all requests in this scenario
+    ->setDataSourceConfiguration(new DataSourceConfiguration(__DIR__ .'/data-file.csv', 'sequential', true));
 
-// Create a test scenario
-$scenario = $test->scenario('Basic API Flow')
-    ->setWeight(1)
-    ->autoHandleCookies();
 
-// Add test steps
-$scenario->step('Get Users')
-    ->get('/api/users')
-    ->validateStatus('success', 200)
-    ->extractFromJson('userId', 'data[0].id');
+$loginScenario->step('Register')
+    ->get('http://localhost:8001/register')
+    ->extractFromRegex('csrf_token_register', 'name="_token" value="(.+?)"') // Extract the csrf token to submit a form
+    ->header('Accept', 'text/html');
 
-$scenario->step('Get User Details')
-    ->get('/api/users/${userId}')
-    ->validateStatus('success', 200);
+$loginScenario->step('Submit Register')
+    ->post(
+        'http://localhost:8001/register',
+        '_token=${csrf_token_register}&name=Test-v&email=${email}&password=${password}&password_confirmation=${password}') // send data with extracted data and source file
+    ->header('Content-Type', 'application/x-www-form-urlencoded')
+    ->validateStatus('status validator from php',302);
 
-// Run the test
+
+// Add first step - Get login page
+$loginScenario->step('get_login_page')
+    ->get('http://localhost:8001/login')
+    ->header('Accept', 'text/html')
+    ->extractFromRegex('csrf_token', 'name="_token" value="(.+?)"')
+    ->validateStatus('status validator from php',200);
+
+// Add second step - Submit login
+$loginScenario->step('submit_login')
+    ->post(
+        'http://localhost:8001/login',
+        '_token=${csrf_token}&email=${email}&password=${password}')
+    ->header('Content-Type', 'application/x-www-form-urlencoded')
+->validateStatus('status validator from php',302);
+
+
+// Add third step - Visit dashboard
+$loginScenario->step('visit_dashboard')
+    ->get('http://localhost:8001/dashboard')
+    ->header('Accept', 'text/html')
+    ->validateStatus('status_code', 200);
+// Run the test 
+// This will start the test and block until it completes
+// pass true to run() to run the test with progress and real time results
 $result = $test->run();
+// OR $test->run(true);  to run the test with progress and real time results
 
 // Access test results
 echo "Success Rate: " . $result->getSuccessRate() . "%\n";
 echo "Average Response Time: " . $result->getAvgResponseTime() . "\n";
+```
+
+```bash
+php test.php
 ```
 
 ## Features
