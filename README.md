@@ -60,8 +60,7 @@ $test
 
 // Create login scenario
 $loginScenario = $test->scenario('User Login')
-    ->autoHandleCookies() // this will save cookies with all requests in this scenario
-    ->setDataSourceConfiguration(new DataSourceConfiguration(__DIR__ .'/data-file.csv', 'sequential', true));
+    ->autoHandleCookies(); // this will save cookies with all requests in this scenario
 
 
 $loginScenario->step('Register')
@@ -101,7 +100,7 @@ $loginScenario->step('visit_dashboard')
 // Run the test 
 // This will start the test and block until it completes
 // pass true to run() to run the test with progress and real time results
-$result = $test->run();
+$result = $test->run(true);
 // OR $test->run(true);  to run the test with progress and real time results
 
 // Access test results
