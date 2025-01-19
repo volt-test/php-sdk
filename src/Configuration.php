@@ -28,7 +28,7 @@ class Configuration
         $this->duration = '';
         $this->rampUp = '';
         $this->target = [
-            'url' => '',
+            'url' => 'https://example.com',
             'idle_timeout' => '30s',
         ];
     }
@@ -82,22 +82,12 @@ class Configuration
         return $this;
     }
 
-    public function setTarget(string $url, string $idleTimeout = '30s'): self
+    public function setTarget(string $idleTimeout = '30s'): self
     {
-        if (! preg_match('/^https?:\/\//', $url)) {
-            throw new VoltTestException('URL should start with http:// or https://');
-        }
-        if (! filter_var($url, FILTER_VALIDATE_URL)) {
-            throw new VoltTestException('Invalid URL');
-        }
         if (! preg_match('/^\d+[smh]$/', $idleTimeout)) {
             throw new VoltTestException('Invalid idle timeout format. Use <number>[s|m|h]');
         }
-        $this->target = [
-            'url' => $url,
-            'idle_timeout' => $idleTimeout,
-        ];
-
+        $this->target['idle_timeout'] = $idleTimeout;
         return $this;
     }
 
