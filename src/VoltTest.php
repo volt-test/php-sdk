@@ -77,7 +77,6 @@ class VoltTest
 
     /**
      * Set the target URL and idle timeout
-     * @param string $url The target URL to test
      * @param string $idleTimeout Default is 30s (30 seconds) example: 1s (1 second), 1m (1 minute), 1h (1 hour)
      * @throws VoltTestException
      */
