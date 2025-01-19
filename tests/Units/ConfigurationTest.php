@@ -25,7 +25,7 @@ class ConfigurationTest extends TestCase
         $this->assertEquals(1, $configArray['virtual_users']);
         $this->assertFalse($configArray['http_debug']);
         $this->assertEquals([
-            'url' => '',
+            'url' => 'https://example.com',
             'idle_timeout' => '30s',
         ], $configArray['target']);
     }
@@ -153,13 +153,13 @@ class ConfigurationTest extends TestCase
     }
 
     #[DataProvider('validTargetProvider')]
-    public function testSetValidTarget(string $url, string $timeout): void
+    public function testSetValidTarget(string $timeout): void
     {
-        $this->config->setTarget($url, $timeout);
+        $this->config->setTarget($timeout);
 
         $configArray = $this->config->toArray();
         $expectedTarget = [
-            'url' => $url,
+            'url' => 'https://example.com',
             'idle_timeout' => $timeout,
         ];
 
@@ -169,12 +169,12 @@ class ConfigurationTest extends TestCase
     public static function validTargetProvider(): array
     {
         return [
-            ['http://example.com', '30s'],
-            ['https://example.com', '1s'],
-            ['http://localhost:8080', '1m'],
-            ['https://api.example.com/v1', '60s'],
-            ['http://example.com', '1m'],
-            ['https://example.com', '2h'],
+            ['30s'],
+            ['1s'],
+            ['1m'],
+            ['60s'],
+            ['1m'],
+            ['2h'],
         ];
     }
 
@@ -201,7 +201,7 @@ class ConfigurationTest extends TestCase
     public function testSetInvalidTargetTimeout(string $timeout): void
     {
         $this->expectException(VoltTestException::class);
-        $this->config->setTarget('http://example.com', $timeout);
+        $this->config->setTarget($timeout);
     }
 
     public static function invalidTargetTimeoutProvider(): array
@@ -224,7 +224,7 @@ class ConfigurationTest extends TestCase
             ->setVirtualUsers(10)
             ->setDuration('5m')
             ->setRampUp('30s')
-            ->setTarget('http://example.com', '1m');
+            ->setTarget('1m');
 
         $this->assertInstanceOf(Configuration::class, $result);
 
@@ -233,7 +233,7 @@ class ConfigurationTest extends TestCase
         $this->assertEquals('5m', $configArray['duration']);
         $this->assertEquals('30s', $configArray['ramp_up']);
         $this->assertEquals([
-            'url' => 'http://example.com',
+            'url' => 'https://example.com',
             'idle_timeout' => '1m',
         ], $configArray['target']);
     }

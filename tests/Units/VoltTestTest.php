@@ -30,7 +30,7 @@ class VoltTestTest extends TestCase
             ->setVirtualUsers(10)
             ->setDuration('1m')
             ->setRampUp('10s')
-            ->setTarget('http://example.com');
+            ->setTarget('30s');
 
         $this->assertInstanceOf(VoltTest::class, $result);
     }
@@ -91,7 +91,7 @@ class VoltTestTest extends TestCase
         $this->voltTest
             ->setVirtualUsers(1)
             ->setDuration('1s')
-            ->setTarget('http://example.com');
+            ->setTarget('40s');
 
         // Add a scenario
         $this->voltTest->scenario('Simple Test')
