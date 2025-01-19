@@ -201,7 +201,7 @@ class ConfigurationTest extends TestCase
     public function testSetInvalidTargetTimeout(string $timeout): void
     {
         $this->expectException(VoltTestException::class);
-        $this->config->setTarget('http://example.com', $timeout);
+        $this->config->setTarget($timeout);
     }
 
     public static function invalidTargetTimeoutProvider(): array
