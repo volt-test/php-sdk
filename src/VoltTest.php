@@ -81,18 +81,12 @@ class VoltTest
      * @param string $idleTimeout Default is 30s (30 seconds) example: 1s (1 second), 1m (1 minute), 1h (1 hour)
      * @throws VoltTestException
      */
-    public function setTarget(string $url, string $idleTimeout = '30s'): self
+    public function setTarget(string $idleTimeout): self
     {
-        if (! preg_match('/^https?:\/\//', $url)) {
-            throw new VoltTestException('URL should start with http:// or https://');
-        }
-        if (! filter_var($url, FILTER_VALIDATE_URL)) {
-            throw new VoltTestException('Invalid URL');
-        }
         if (! preg_match('/^\d+[smh]$/', $idleTimeout)) {
             throw new VoltTestException('Invalid idle timeout format. Use <number>[s|m|h]');
         }
-        $this->config->setTarget($url, $idleTimeout);
+        $this->config->setTarget($idleTimeout);
 
         return $this;
     }
