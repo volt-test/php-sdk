@@ -40,6 +40,7 @@ composer install
 touch test.php
 ```
 ```php
+// test.php
 <?php
 require 'vendor/autoload.php';
 
@@ -106,6 +107,10 @@ $result = $test->run();
 // Access test results
 echo "Success Rate: " . $result->getSuccessRate() . "%\n";
 echo "Average Response Time: " . $result->getAvgResponseTime() . "\n";
+```
+
+```bash
+php test.php
 ```
 
 ## Features
