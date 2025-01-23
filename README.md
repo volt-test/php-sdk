@@ -132,6 +132,7 @@ php test.php
 - PHP 8.0 or higher
 - ext-json
 - ext-pcntl
+- ext-curl
 
 ## License
 
