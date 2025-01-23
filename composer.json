@@ -24,7 +24,8 @@
   ],
   "require": {
     "php": "^8.0",
-    "ext-json": "*"
+    "ext-json": "*",
+    "ext-curl": "*"
   },
   "suggest": {
     "ext-pcntl": "For signal handling support on Unix-like systems"

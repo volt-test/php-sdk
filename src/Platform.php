@@ -5,71 +5,73 @@ namespace VoltTest;
 class Platform
 {
     private const BINARY_NAME = 'volt-test';
+
+    private const CURRENT_VERSION = 'v0.0.1-beta';
+    private const BASE_DOWNLOAD_URL = 'https://github.com/volt-test/binaries/releases/download';
     private const SUPPORTED_PLATFORMS = [
-        'linux-amd64' => 'linux-amd64/volt-test',
-        'darwin-amd64' => 'darwin-amd64/volt-test',
-        'darwin-arm64' => 'darwin-arm64/volt-test',
-        'windows-amd64' => 'windows-amd64/volt-test.exe',
-        'windows-AMD64' => 'windows-amd64/volt-test.exe',
+        'linux-amd64' => 'volt-test-linux-amd64',
+        'darwin-amd64' => 'volt-test-darwin-amd64',
+        'darwin-arm64' => 'volt-test-darwin-arm64',
+        'windows-amd64' => 'volt-test-windows-amd64.exe'
     ];
 
-    public static function installBinary($testing = false): void
+    private static function getVendorDir(): string
     {
-        $platform = self::detectPlatform($testing);
-
-        if (! array_key_exists($platform, self::SUPPORTED_PLATFORMS)) {
-            throw new \RuntimeException("Platform $platform is not supported");
+        // First try using Composer's environment variable
+        if (getenv('COMPOSER_VENDOR_DIR')) {
+            return rtrim(getenv('COMPOSER_VENDOR_DIR'), '/\\');
         }
 
-        $sourceFile = __DIR__ . '/../bin/platforms/' . self::SUPPORTED_PLATFORMS[$platform];
-        $targetDir = self::getBinaryDir();
-        $targetFile = $targetDir . '/' . basename(self::SUPPORTED_PLATFORMS[$platform]);
-
-        if (! file_exists($sourceFile)) {
-            throw new \RuntimeException("Binary not found for platform: $platform");
-        }
-
-        if (! is_dir($targetDir)) {
-            if (! mkdir($targetDir, 0755, true)) {
-                throw new \RuntimeException("Failed to create directory: $targetDir");
+        // Then try using Composer's home directory
+        if (getenv('COMPOSER_HOME')) {
+            $vendorDir = rtrim(getenv('COMPOSER_HOME'), '/\\') . '/vendor';
+            if (is_dir($vendorDir)) {
+                return $vendorDir;
             }
         }
 
-        if (! copy($sourceFile, $targetFile)) {
-            throw new \RuntimeException("Failed to copy binary to: $targetFile");
-        }
+        // Try to find vendor directory relative to current file
+        $paths = [
+            __DIR__ . '/../../../',           // From src/VoltTest to vendor
+            __DIR__ . '/vendor/',             // Direct vendor subdirectory
+            dirname(__DIR__, 2) . '/vendor/', // Two levels up
+            dirname(__DIR__, 3) . '/vendor/', // Three levels up
+            dirname(__DIR__) . '/vendor/',
+        ];
 
-        chmod($targetFile, 0755);
-
-        // Create symlink in vendor/bin
-        $vendorBinDir = self::getVendorBinDir();
-        if (! is_dir($vendorBinDir)) {
-            if (! mkdir($vendorBinDir, 0755, true)) {
-                throw new \RuntimeException("Failed to create vendor bin directory: $vendorBinDir");
+        foreach ($paths as $path) {
+            if (file_exists($path . 'autoload.php')) {
+                return rtrim($path, '/\\');
             }
         }
 
-        $symlinkPath = $vendorBinDir . '/' . self::BINARY_NAME;
-        if (file_exists($symlinkPath)) {
-            unlink($symlinkPath);
-        }
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            // Windows doesn't support symlinks by default, so we'll copy the file
-            if (! copy($targetFile, $symlinkPath)) {
-                throw new \RuntimeException("Failed to copy binary to vendor/bin: $symlinkPath");
-            }
-        } else {
-            if (! symlink($targetFile, $symlinkPath)) {
-                throw new \RuntimeException("Failed to create symlink in vendor/bin: $symlinkPath");
+        // If running as a Composer script, use the working directory
+        if (getenv('COMPOSER')) {
+            $path = getcwd() . '/vendor';
+            if (is_dir($path)) {
+                return $path;
             }
         }
 
+        throw new \RuntimeException(
+            'Could not locate Composer vendor directory. ' .
+            'Please ensure you are installing through Composer.'
+        );
+    }
+
+    private static function getBinaryDir(): string
+    {
+        return self::getVendorDir() . '/bin';
+    }
+
+    private static function getCurrentVersion(): string
+    {
+        return self::CURRENT_VERSION;
     }
 
     private static function detectPlatform($testing = false): string
     {
-        if ($testing === true) {
+        if ($testing) {
             return 'unsupported-platform';
         }
         $os = strtolower(PHP_OS);
@@ -82,40 +84,131 @@ class Platform
         } elseif (strpos($os, 'linux') === 0) {
             $os = 'linux';
         }
+
         if ($arch === 'x86_64') {
             $arch = 'amd64';
+        } elseif ($arch === 'arm64' || $arch === 'aarch64') {
+            $arch = 'arm64';
         }
 
         return "$os-$arch";
     }
 
-    private static function getBinaryDir(): string
+    public static function installBinary($testing = false): void
     {
-        return self::getVendorDir() . '/volt-test/bin';
-    }
+        $platform = self::detectPlatform($testing);
 
-    private static function getVendorBinDir(): string
-    {
-        return self::getVendorDir() . '/bin';
-    }
-
-    private static function getVendorDir(): string
-    {
-        // Traverse up from current directory until we find vendor directory
-        $dir = __DIR__;
-        while ($dir !== '/' && ! is_dir($dir . '/vendor')) {
-            $dir = dirname($dir);
+        if (!array_key_exists($platform, self::SUPPORTED_PLATFORMS)) {
+            throw new \RuntimeException("Platform $platform is not supported");
         }
 
-        if (! is_dir($dir . '/vendor')) {
-            throw new \RuntimeException('Could not locate vendor directory');
+        $version = self::getCurrentVersion();
+        $binaryName = self::SUPPORTED_PLATFORMS[$platform];
+        $downloadUrl = sprintf('%s/%s/%s', self::BASE_DOWNLOAD_URL, $version, $binaryName);
+
+        $binDir = self::getBinaryDir();
+        $targetFile = $binDir . '/' . self::BINARY_NAME;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $targetFile .= '.exe';
         }
 
-        return $dir . '/vendor';
+        if (!is_dir($binDir)) {
+            if (!mkdir($binDir, 0755, true)) {
+                throw new \RuntimeException("Failed to create directory: $binDir");
+            }
+        }
+
+        echo "Downloading VoltTest binary $version for platform: $platform\n";
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'volt-test-download-');
+        if ($tempFile === false) {
+            throw new \RuntimeException("Failed to create temporary file");
+        }
+
+        try {
+            $ch = curl_init($downloadUrl);
+            if ($ch === false) {
+                throw new \RuntimeException("Failed to initialize cURL");
+            }
+
+            $fp = fopen($tempFile, 'w');
+            if ($fp === false) {
+                curl_close($ch);
+                throw new \RuntimeException("Failed to open temporary file for writing");
+            }
+
+            curl_setopt_array($ch, [
+                CURLOPT_FILE => $fp,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_FAILONERROR => true,
+                CURLOPT_TIMEOUT => 300,
+                CURLOPT_CONNECTTIMEOUT => 30,
+                CURLOPT_HTTPHEADER => ['User-Agent: volt-test-php-sdk']
+            ]);
+
+            if (curl_exec($ch) === false) {
+                throw new \RuntimeException("Download failed: " . curl_error($ch));
+            }
+
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($httpCode !== 200) {
+                throw new \RuntimeException("HTTP request failed with status $httpCode");
+            }
+
+            curl_close($ch);
+            fclose($fp);
+
+            if (!file_exists($tempFile) || filesize($tempFile) === 0) {
+                throw new \RuntimeException("Downloaded file is empty or missing");
+            }
+
+            if (!rename($tempFile, $targetFile)) {
+                throw new \RuntimeException("Failed to move downloaded binary to: $targetFile");
+            }
+
+            if (!chmod($targetFile, 0755)) {
+                throw new \RuntimeException("Failed to set executable permissions on binary");
+            }
+
+            file_put_contents($binDir . '/.volt-test-version', $version);
+
+            echo "Successfully installed VoltTest binary $version to: $targetFile\n";
+        } catch (\Exception $e) {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+            throw $e;
+        }
     }
 
     public static function getBinaryPath(): string
     {
-        return self::getBinaryDir() . '/' . basename(self::SUPPORTED_PLATFORMS[self::detectPlatform()]);
+        $binDir = self::getBinaryDir();
+        $binaryName = self::BINARY_NAME;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $binaryName .= '.exe';
+        }
+
+        $binaryPath = $binDir . '/' . $binaryName;
+        $versionFile = $binDir . '/.volt-test-version';
+
+        $needsInstall = true;
+
+        if (file_exists($binaryPath) && file_exists($versionFile)) {
+            try {
+                $currentVersion = trim(file_get_contents($versionFile));
+                $latestVersion = self::getCurrentVersion();
+                $needsInstall = $currentVersion !== $latestVersion;
+            } catch (\Exception $e) {
+                $needsInstall = true;
+            }
+        }
+
+        if ($needsInstall) {
+            self::installBinary();
+        }
+
+        return $binaryPath;
     }
 }
