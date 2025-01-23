@@ -12,7 +12,8 @@ class Platform
         'linux-amd64' => 'volt-test-linux-amd64',
         'darwin-amd64' => 'volt-test-darwin-amd64',
         'darwin-arm64' => 'volt-test-darwin-arm64',
-        'windows-amd64' => 'volt-test-windows-amd64.exe'
+        'windows-amd64' => 'volt-test-windows-amd64.exe',
+        'windows-AMD64' => 'volt-test-windows-amd64.exe',
     ];
 
     private static function getVendorDir(): string
