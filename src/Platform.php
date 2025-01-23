@@ -71,7 +71,7 @@ class Platform
 
     private static function detectPlatform($testing = false): string
     {
-        if ($testing) {
+        if ($testing === true) {
             return 'unsupported-platform';
         }
         $os = strtolower(PHP_OS);
