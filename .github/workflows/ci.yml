@@ -44,6 +44,11 @@ jobs:
         run: |
           choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
           refreshenv
+          # Download CA bundle
+          Invoke-WebRequest -Uri https://curl.se/ca/cacert.pem -OutFile C:\tools\cacert.pem
+          # Configure PHP to use the CA bundle
+          $phpIni = php --ini | Select-String "Loaded Configuration File" | ForEach-Object { $_.Line.Split()[-1] }
+          Add-Content $phpIni "`nopenssl.cafile = C:\tools\cacert.pem"
           php -v
         shell: pwsh
 
