@@ -107,7 +107,9 @@ class PlatformTest extends TestCase
         // Check vendor/bin symlink or copy
         $vendorBinDir = $vendorDir . '/bin';
         $symlinkPath = $vendorBinDir . '/volt-test';
-
+        if (PHP_OS_FAMILY === 'Windows') {
+            $symlinkPath .= '.exe';
+        }
         $this->assertTrue(
             file_exists($symlinkPath) || is_link($symlinkPath),
             "Symlink or copy in vendor/bin directory was not created"
