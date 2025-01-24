@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     name: PHP Tests - ${{ matrix.os }} - PHP ${{ matrix.php }}
-    runs-on: ${{ matrix.os }} - PHP ${{ matrix.php }}
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
 
