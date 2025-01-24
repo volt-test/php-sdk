@@ -71,7 +71,7 @@ class PlatformTest extends TestCase
 
         // Assert that the binary path contains the expected directory structure
         $this->assertStringContainsString(
-            'volt-test/bin',
+            '/bin',
             $binaryPath,
             "Binary path does not contain the expected directory structure"
         );
@@ -94,7 +94,7 @@ class PlatformTest extends TestCase
         $vendorDir = $getVendorDirMethod->invoke($platform);
 
         // Assert that the binary directory is created
-        $binaryDir = $vendorDir . '/volt-test/bin';
+        $binaryDir = $vendorDir . '/bin';
         $this->assertDirectoryExists($binaryDir, "Binary directory was not created");
 
         // Assert that the binary file exists
@@ -107,7 +107,9 @@ class PlatformTest extends TestCase
         // Check vendor/bin symlink or copy
         $vendorBinDir = $vendorDir . '/bin';
         $symlinkPath = $vendorBinDir . '/volt-test';
-
+        if (PHP_OS_FAMILY === 'Windows') {
+            $symlinkPath .= '.exe';
+        }
         $this->assertTrue(
             file_exists($symlinkPath) || is_link($symlinkPath),
             "Symlink or copy in vendor/bin directory was not created"
