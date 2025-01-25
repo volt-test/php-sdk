@@ -50,7 +50,7 @@ class TestResult
     private function parseMainMetrics(): void
     {
         // Duration
-        if (preg_match('/Duration:\s+([^\n]+)', $this->rawOutput, $matches)) {
+        if (preg_match('/Duration:\s+([\d.]+(?:ms|s|m|hr))/', $this->rawOutput, $matches)) {
             $this->parsedResults['duration'] = $matches[1];
         }
 
