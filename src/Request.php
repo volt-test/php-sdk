@@ -101,12 +101,15 @@ class Request
      * */
     public function toArray(): array
     {
-        return [
+        $array = [
             'method' => $this->method,
             'url' => $this->url,
-            'header' => $this->headers,
             'body' => $this->body,
         ];
+        if (count($this->headers) > 0) {
+            $array['header'] = $this->headers;
+        }
+        return $array;
     }
 
     /**
