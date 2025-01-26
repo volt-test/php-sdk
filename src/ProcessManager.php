@@ -7,6 +7,7 @@ use RuntimeException;
 class ProcessManager
 {
     private string $binaryPath;
+
     private $currentProcess = null;
 
     public function __construct(string $binaryPath)
@@ -33,7 +34,7 @@ class ProcessManager
         [$success, $process, $pipes] = $this->openProcess();
         $this->currentProcess = $process;
 
-        if (!$success || !is_array($pipes)) {
+        if (! $success || ! is_array($pipes)) {
             throw new RuntimeException('Failed to start process of volt test');
         }
 
@@ -62,6 +63,7 @@ class ProcessManager
                 $this->currentProcess = null;
                 if ($exitCode !== 0) {
                     echo "\nError: " . trim($stderrContent) . "\n";
+
                     return '';
                 }
             }
@@ -96,7 +98,7 @@ class ProcessManager
             ['bypass_shell' => true]
         );
 
-        if (!is_resource($process)) {
+        if (! is_resource($process)) {
             return [false, null, []];
         }
 
@@ -128,6 +130,7 @@ class ProcessManager
                     if (feof($pipe)) {
                         fclose($pipe);
                         unset($pipes[$type]);
+
                         continue;
                     }
                 }
@@ -155,7 +158,7 @@ class ProcessManager
 
     protected function closeProcess($process): int
     {
-        if (!is_resource($process)) {
+        if (! is_resource($process)) {
             return -1;
         }
 

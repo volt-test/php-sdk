@@ -63,7 +63,6 @@ class ProcessManagerTest extends TestCase
         ];
     }
 
-
     public function testLongRunningProcess(): void
     {
         $longOutput = str_repeat("Output line\n", 100);
