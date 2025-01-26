@@ -109,6 +109,7 @@ class Request
         if (count($this->headers) > 0) {
             $array['header'] = $this->headers;
         }
+
         return $array;
     }
 

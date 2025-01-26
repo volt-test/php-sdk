@@ -13,7 +13,6 @@ class ProcessManager
     public function __construct(string $binaryPath)
     {
         $this->binaryPath = $binaryPath;
-        // Enable async signals
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
             pcntl_signal(SIGINT, [$this, 'handleSignal']);
@@ -44,7 +43,14 @@ class ProcessManager
             fclose($pipes[0]);
 
             $output = $this->handleProcess($pipes, $streamOutput);
-        } finally {
+
+            // Store stderr content before closing
+            $stderrContent = '';
+            if (isset($pipes[2]) && is_resource($pipes[2])) {
+                rewind($pipes[2]);
+                $stderrContent = stream_get_contents($pipes[2]);
+            }
+
             // Clean up pipes
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
@@ -56,12 +62,24 @@ class ProcessManager
                 $exitCode = $this->closeProcess($process);
                 $this->currentProcess = null;
                 if ($exitCode !== 0) {
-                    throw new RuntimeException('Process failed with exit code ' . $exitCode);
+                    echo "\nError: " . trim($stderrContent) . "\n";
+
+                    return '';
                 }
             }
-        }
 
-        return $output;
+            return $output;
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if (is_resource($process)) {
+                $this->closeProcess($process);
+                $this->currentProcess = null;
+            }
+        }
     }
 
     protected function openProcess(): array
@@ -148,6 +166,7 @@ class ProcessManager
         if ($status['running']) {
             proc_terminate($process);
         }
+
 
         return proc_close($process);
     }

@@ -6,7 +6,7 @@ class Platform
 {
     private const BINARY_NAME = 'volt-test';
 
-    private const CURRENT_VERSION = 'v0.0.1-beta';
+    private const ENGINE_CURRENT_VERSION = 'v0.0.1';
     private const BASE_DOWNLOAD_URL = 'https://github.com/volt-test/binaries/releases/download';
     private const SUPPORTED_PLATFORMS = [
         'linux-amd64' => 'volt-test-linux-amd64',
@@ -67,7 +67,7 @@ class Platform
 
     private static function getCurrentVersion(): string
     {
-        return self::CURRENT_VERSION;
+        return self::ENGINE_CURRENT_VERSION;
     }
 
     private static function detectPlatform($testing = false): string
@@ -99,7 +99,7 @@ class Platform
     {
         $platform = self::detectPlatform($testing);
 
-        if (!array_key_exists($platform, self::SUPPORTED_PLATFORMS)) {
+        if (! array_key_exists($platform, self::SUPPORTED_PLATFORMS)) {
             throw new \RuntimeException("Platform $platform is not supported");
         }
 
@@ -113,8 +113,8 @@ class Platform
             $targetFile .= '.exe';
         }
 
-        if (!is_dir($binDir)) {
-            if (!mkdir($binDir, 0755, true)) {
+        if (! is_dir($binDir)) {
+            if (! mkdir($binDir, 0755, true)) {
                 throw new \RuntimeException("Failed to create directory: $binDir");
             }
         }
@@ -135,6 +135,7 @@ class Platform
             $fp = fopen($tempFile, 'w');
             if ($fp === false) {
                 curl_close($ch);
+
                 throw new \RuntimeException("Failed to open temporary file for writing");
             }
 
@@ -145,7 +146,7 @@ class Platform
                 CURLOPT_FAILONERROR => true,
                 CURLOPT_TIMEOUT => 300,
                 CURLOPT_CONNECTTIMEOUT => 30,
-                CURLOPT_HTTPHEADER => ['User-Agent: volt-test-php-sdk']
+                CURLOPT_HTTPHEADER => ['User-Agent: volt-test-php-sdk'],
             ]);
 
             if (curl_exec($ch) === false) {
@@ -160,15 +161,15 @@ class Platform
             curl_close($ch);
             fclose($fp);
 
-            if (!file_exists($tempFile) || filesize($tempFile) === 0) {
+            if (! file_exists($tempFile) || filesize($tempFile) === 0) {
                 throw new \RuntimeException("Downloaded file is empty or missing");
             }
 
-            if (!rename($tempFile, $targetFile)) {
+            if (! rename($tempFile, $targetFile)) {
                 throw new \RuntimeException("Failed to move downloaded binary to: $targetFile");
             }
 
-            if (!chmod($targetFile, 0755)) {
+            if (! chmod($targetFile, 0755)) {
                 throw new \RuntimeException("Failed to set executable permissions on binary");
             }
 
@@ -179,6 +180,7 @@ class Platform
             if (file_exists($tempFile)) {
                 unlink($tempFile);
             }
+
             throw $e;
         }
     }

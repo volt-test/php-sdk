@@ -88,6 +88,7 @@ class Configuration
             throw new VoltTestException('Invalid idle timeout format. Use <number>[s|m|h]');
         }
         $this->target['idle_timeout'] = $idleTimeout;
+
         return $this;
     }
 
