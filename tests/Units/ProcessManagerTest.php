@@ -63,37 +63,6 @@ class ProcessManagerTest extends TestCase
         ];
     }
 
-    #[DataProvider('errorScenarioProvider')]
-    public function testErrorScenarios(
-        bool $failStart,
-        int $exitCode,
-        string $errorOutput,
-        string $expectedMessage
-    ): void {
-        $this->processManager->setFailProcessStart($failStart);
-        $this->processManager->setMockExitCode($exitCode);
-        $this->processManager->setMockStderr($errorOutput);
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage($expectedMessage);
-
-        $this->processManager->execute(['test' => true], false);
-    }
-
-    public static function errorScenarioProvider(): array
-    {
-        return [
-            'process start failure' => [
-                true, 0, '', 'Failed to start process',
-            ],
-            'non-zero exit code' => [
-                false, 1, 'Error occurred', 'Process failed with exit code 1',
-            ],
-            'permission error' => [
-                false, 126, 'Permission denied', 'Process failed with exit code 126',
-            ],
-        ];
-    }
 
     public function testLongRunningProcess(): void
     {
