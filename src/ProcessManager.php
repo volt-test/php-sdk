@@ -1,19 +1,21 @@
 <?php
 
 namespace VoltTest;
-
 use RuntimeException;
 
 class ProcessManager
 {
     private string $binaryPath;
-
     private $currentProcess = null;
+    private $isWindows;
 
     public function __construct(string $binaryPath)
     {
         $this->binaryPath = $binaryPath;
-        if (function_exists('pcntl_async_signals')) {
+        $this->isWindows = PHP_OS_FAMILY === 'Windows';
+
+        // Only register signal handlers on non-Windows systems
+        if (!$this->isWindows && function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
             pcntl_signal(SIGINT, [$this, 'handleSignal']);
             pcntl_signal(SIGTERM, [$this, 'handleSignal']);
@@ -34,23 +36,15 @@ class ProcessManager
         [$success, $process, $pipes] = $this->openProcess();
         $this->currentProcess = $process;
 
-        if (! $success || ! is_array($pipes)) {
+        if (!$success || !is_array($pipes)) {
             throw new RuntimeException('Failed to start process of volt test');
         }
 
         try {
             $this->writeInput($pipes[0], json_encode($config, JSON_PRETTY_PRINT));
             fclose($pipes[0]);
-
-            $output = $this->handleProcess($pipes, $streamOutput);
-
-            // Store stderr content before closing
-            $stderrContent = '';
-            if (isset($pipes[2]) && is_resource($pipes[2])) {
-                rewind($pipes[2]);
-                $stderrContent = stream_get_contents($pipes[2]);
-            }
-
+            return $this->handleProcess($pipes, $streamOutput);
+        } finally {
             // Clean up pipes
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
@@ -62,43 +56,38 @@ class ProcessManager
                 $exitCode = $this->closeProcess($process);
                 $this->currentProcess = null;
                 if ($exitCode !== 0) {
-                    echo "\nError: " . trim($stderrContent) . "\n";
-
-                    return '';
+                    throw new RuntimeException('Process failed with exit code ' . $exitCode);
                 }
-            }
-
-            return $output;
-        } finally {
-            foreach ($pipes as $pipe) {
-                if (is_resource($pipe)) {
-                    fclose($pipe);
-                }
-            }
-            if (is_resource($process)) {
-                $this->closeProcess($process);
-                $this->currentProcess = null;
             }
         }
     }
 
     protected function openProcess(): array
     {
-        $pipes = [];
+        $descriptorspec = [
+            0 => ['pipe', 'r'],  // stdin
+            1 => ['pipe', 'w'],  // stdout
+            2 => ['pipe', 'w']   // stderr
+        ];
+
+        // Windows-specific process options
+        $options = $this->isWindows ? [
+            'bypass_shell' => true,
+            'create_process_group' => true  // Important for Windows process management
+        ] : [
+            'bypass_shell' => true
+        ];
+
         $process = proc_open(
             $this->binaryPath,
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
+            $descriptorspec,
             $pipes,
             null,
             null,
-            ['bypass_shell' => true]
+            $options
         );
 
-        if (! is_resource($process)) {
+        if (!is_resource($process)) {
             return [false, null, []];
         }
 
@@ -108,17 +97,36 @@ class ProcessManager
     private function handleProcess(array $pipes, bool $streamOutput): string
     {
         $output = '';
+        $running = true;
 
-        while (true) {
+        // Set streams to non-blocking mode
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                stream_set_blocking($pipe, false);
+            }
+        }
+
+        while ($running) {
             $read = array_filter($pipes, 'is_resource');
             if (empty($read)) {
                 break;
             }
 
+            // Windows-specific: Check process status
+            if ($this->isWindows) {
+                $status = proc_get_status($this->currentProcess);
+                if (!$status['running']) {
+                    $running = false;
+                }
+            }
+
             $write = null;
             $except = null;
 
-            if (stream_select($read, $write, $except, 1) === false) {
+            // Use a shorter timeout on Windows
+            $timeout = $this->isWindows ? 0.1 : 1;
+
+            if (stream_select($read, $write, $except, 0, $timeout * 1000000) === false) {
                 break;
             }
 
@@ -130,7 +138,6 @@ class ProcessManager
                     if (feof($pipe)) {
                         fclose($pipe);
                         unset($pipes[$type]);
-
                         continue;
                     }
                 }
@@ -139,9 +146,15 @@ class ProcessManager
                     $output .= $data;
                     if ($streamOutput) {
                         echo $data;
+                        if ($this->isWindows) {
+                            flush(); // Ensure output is displayed immediately on Windows
+                        }
                     }
                 } elseif ($type === 2 && $streamOutput) { // stderr
                     fwrite(STDERR, $data);
+                    if ($this->isWindows) {
+                        flush();
+                    }
                 }
             }
         }
@@ -153,20 +166,27 @@ class ProcessManager
     {
         if (is_resource($pipe)) {
             fwrite($pipe, $input);
+            if ($this->isWindows) {
+                fflush($pipe); // Ensure data is written immediately on Windows
+            }
         }
     }
 
     protected function closeProcess($process): int
     {
-        if (! is_resource($process)) {
+        if (!is_resource($process)) {
             return -1;
         }
 
         $status = proc_get_status($process);
         if ($status['running']) {
-            proc_terminate($process);
+            // Windows-specific process termination
+            if ($this->isWindows) {
+                exec('taskkill /F /T /PID ' . $status['pid']);
+            } else {
+                proc_terminate($process);
+            }
         }
-
 
         return proc_close($process);
     }
