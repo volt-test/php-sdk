@@ -7,7 +7,6 @@ use RuntimeException;
 class ProcessManager
 {
     private string $binaryPath;
-
     private $currentProcess = null;
 
     public function __construct(string $binaryPath)
@@ -63,7 +62,6 @@ class ProcessManager
                 $this->currentProcess = null;
                 if ($exitCode !== 0) {
                     echo "\nError: " . trim($stderrContent) . "\n";
-
                     return '';
                 }
             }
@@ -174,7 +172,7 @@ class ProcessManager
         // Windows-specific termination sequence
         if (DIRECTORY_SEPARATOR === '\\') {
             proc_terminate($process);
-            usleep(100000); // Allow time for termination
+            usleep(100000);
             $status = proc_get_status($process);
             if ($status['running']) {
                 proc_terminate($process, SIGKILL);
