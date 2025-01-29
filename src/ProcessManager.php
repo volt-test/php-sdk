@@ -7,45 +7,132 @@ class ProcessManager
 {
     private string $binaryPath;
     private $currentProcess = null;
-    private $isWindows;
+    private bool $debug;
 
-    public function __construct(string $binaryPath)
+    public function __construct(string $binaryPath, bool $debug = true)
     {
         $this->binaryPath = $binaryPath;
-        $this->isWindows = PHP_OS_FAMILY === 'Windows';
-
-        // Only register signal handlers on non-Windows systems
-        if (!$this->isWindows && function_exists('pcntl_async_signals')) {
-            pcntl_async_signals(true);
-            pcntl_signal(SIGINT, [$this, 'handleSignal']);
-            pcntl_signal(SIGTERM, [$this, 'handleSignal']);
-        }
+        $this->debug = $debug;
+        $this->debugLog("ProcessManager initialized with binary: $binaryPath");
     }
 
-    private function handleSignal(int $signal): void
+    private function debugLog(string $message): void
     {
-        if ($this->currentProcess && is_resource($this->currentProcess)) {
-            proc_terminate($this->currentProcess);
-            proc_close($this->currentProcess);
+        if ($this->debug) {
+            echo "[DEBUG] " . date('Y-m-d H:i:s') . " - $message\n";
+            flush();
         }
-        exit(0);
     }
 
     public function execute(array $config, bool $streamOutput): string
     {
-        [$success, $process, $pipes] = $this->openProcess();
-        $this->currentProcess = $process;
+        $this->debugLog("Starting execution");
 
-        if (!$success || !is_array($pipes)) {
-            throw new RuntimeException('Failed to start process of volt test');
+        // For Windows, ensure the path is properly quoted
+        $cmd = PHP_OS_FAMILY === 'Windows'
+            ? '"' . str_replace('/', '\\', $this->binaryPath) . '"'
+            : $this->binaryPath;
+
+        $this->debugLog("Command to execute: $cmd");
+
+        // Create temporary file for input
+        $tmpfname = tempnam(sys_get_temp_dir(), 'volt_');
+        $this->debugLog("Created temporary file: $tmpfname");
+
+        file_put_contents($tmpfname, json_encode($config, JSON_PRETTY_PRINT));
+        $this->debugLog("Written config to temporary file");
+
+        $descriptorspec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w']
+        ];
+
+        $this->debugLog("Opening process");
+
+        $process = proc_open($cmd, $descriptorspec, $pipes, null, null, [
+            'bypass_shell' => true,
+            'create_process_group' => true
+        ]);
+
+        if (!is_resource($process)) {
+            unlink($tmpfname);
+            throw new RuntimeException('Failed to start process');
         }
 
+        $this->currentProcess = $process;
+        $this->debugLog("Process started successfully");
+
         try {
-            $this->writeInput($pipes[0], json_encode($config, JSON_PRETTY_PRINT));
+            // Write config to stdin
+            $this->debugLog("Writing config to process");
+            fwrite($pipes[0], file_get_contents($tmpfname));
             fclose($pipes[0]);
-            return $this->handleProcess($pipes, $streamOutput);
-        } finally {
-            // Clean up pipes
+            unlink($tmpfname);
+
+            $this->debugLog("Starting to read output");
+            $output = '';
+
+            // Set streams to non-blocking
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+
+            while (true) {
+                $status = proc_get_status($process);
+
+                if (!$status['running']) {
+                    $this->debugLog("Process has finished running");
+                    break;
+                }
+
+                $read = [$pipes[1], $pipes[2]];
+                $write = null;
+                $except = null;
+
+                if (stream_select($read, $write, $except, 0, 100000)) {
+                    foreach ($read as $pipe) {
+                        $data = fread($pipe, 4096);
+                        if ($data === false || $data === '') {
+                            continue;
+                        }
+
+                        if ($pipe === $pipes[1]) {
+                            $output .= $data;
+                            if ($streamOutput) {
+                                echo $data;
+                                flush();
+                            }
+                        } else {
+                            fwrite(STDERR, $data);
+                            flush();
+                        }
+                    }
+                }
+            }
+
+            $this->debugLog("Finished reading output");
+
+            // Close remaining pipes
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+
+            // Get exit code
+            $exitCode = proc_close($process);
+            $this->debugLog("Process closed with exit code: $exitCode");
+
+            if ($exitCode !== 0) {
+                throw new RuntimeException("Process failed with exit code $exitCode");
+            }
+
+            return $output;
+
+        } catch (\Exception $e) {
+            $this->debugLog("Error occurred: " . $e->getMessage());
+
+            // Clean up
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
                     fclose($pipe);
@@ -53,141 +140,19 @@ class ProcessManager
             }
 
             if (is_resource($process)) {
-                $exitCode = $this->closeProcess($process);
-                $this->currentProcess = null;
-                if ($exitCode !== 0) {
-                    throw new RuntimeException('Process failed with exit code ' . $exitCode);
-                }
-            }
-        }
-    }
-
-    protected function openProcess(): array
-    {
-        $descriptorspec = [
-            0 => ['pipe', 'r'],  // stdin
-            1 => ['pipe', 'w'],  // stdout
-            2 => ['pipe', 'w']   // stderr
-        ];
-
-        // Windows-specific process options
-        $options = $this->isWindows ? [
-            'bypass_shell' => true,
-            'create_process_group' => true  // Important for Windows process management
-        ] : [
-            'bypass_shell' => true
-        ];
-
-        $process = proc_open(
-            $this->binaryPath,
-            $descriptorspec,
-            $pipes,
-            null,
-            null,
-            $options
-        );
-
-        if (!is_resource($process)) {
-            return [false, null, []];
-        }
-
-        return [true, $process, $pipes];
-    }
-
-    private function handleProcess(array $pipes, bool $streamOutput): string
-    {
-        $output = '';
-        $running = true;
-
-        // Set streams to non-blocking mode
-        foreach ($pipes as $pipe) {
-            if (is_resource($pipe)) {
-                stream_set_blocking($pipe, false);
-            }
-        }
-
-        while ($running) {
-            $read = array_filter($pipes, 'is_resource');
-            if (empty($read)) {
-                break;
-            }
-
-            // Windows-specific: Check process status
-            if ($this->isWindows) {
-                $status = proc_get_status($this->currentProcess);
-                if (!$status['running']) {
-                    $running = false;
-                }
-            }
-
-            $write = null;
-            $except = null;
-
-            // Use a shorter timeout on Windows
-            $timeout = $this->isWindows ? 0.1 : 1;
-
-            if (stream_select($read, $write, $except, 0, $timeout * 1000000) === false) {
-                break;
-            }
-
-            foreach ($read as $pipe) {
-                $type = array_search($pipe, $pipes, true);
-                $data = fread($pipe, 4096);
-
-                if ($data === false || $data === '') {
-                    if (feof($pipe)) {
-                        fclose($pipe);
-                        unset($pipes[$type]);
-                        continue;
+                $status = proc_get_status($process);
+                if ($status['running']) {
+                    // Force kill on Windows
+                    if (PHP_OS_FAMILY === 'Windows') {
+                        exec('taskkill /F /T /PID ' . $status['pid']);
+                    } else {
+                        proc_terminate($process);
                     }
                 }
-
-                if ($type === 1) { // stdout
-                    $output .= $data;
-                    if ($streamOutput) {
-                        echo $data;
-                        if ($this->isWindows) {
-                            flush(); // Ensure output is displayed immediately on Windows
-                        }
-                    }
-                } elseif ($type === 2 && $streamOutput) { // stderr
-                    fwrite(STDERR, $data);
-                    if ($this->isWindows) {
-                        flush();
-                    }
-                }
+                proc_close($process);
             }
+
+            throw $e;
         }
-
-        return $output;
-    }
-
-    protected function writeInput($pipe, string $input): void
-    {
-        if (is_resource($pipe)) {
-            fwrite($pipe, $input);
-            if ($this->isWindows) {
-                fflush($pipe); // Ensure data is written immediately on Windows
-            }
-        }
-    }
-
-    protected function closeProcess($process): int
-    {
-        if (!is_resource($process)) {
-            return -1;
-        }
-
-        $status = proc_get_status($process);
-        if ($status['running']) {
-            // Windows-specific process termination
-            if ($this->isWindows) {
-                exec('taskkill /F /T /PID ' . $status['pid']);
-            } else {
-                proc_terminate($process);
-            }
-        }
-
-        return proc_close($process);
     }
 }
