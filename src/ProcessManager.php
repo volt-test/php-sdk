@@ -8,23 +8,18 @@ class ProcessManager
     private string $binaryPath;
     private $currentProcess = null;
     private bool $debug;
+    private int $timeout = 30; // timeout in seconds
 
-    public function __construct(string $binaryPath, bool $debug = true)
+    public function __construct(string $binaryPath, bool $debug = false)
     {
-        // Normalize path for Windows
         $this->binaryPath = str_replace('/', '\\', $binaryPath);
         $this->debug = $debug;
 
-        // Verify binary exists and is executable
         if (!file_exists($this->binaryPath)) {
             throw new RuntimeException("Binary not found at: {$this->binaryPath}");
         }
 
-        if (!is_executable($this->binaryPath)) {
-            throw new RuntimeException("Binary is not executable: {$this->binaryPath}");
-        }
-
-        $this->debugLog("ProcessManager initialized with verified binary: {$this->binaryPath}");
+        $this->debugLog("ProcessManager initialized with binary: {$this->binaryPath}");
     }
 
     private function debugLog(string $message): void
@@ -39,107 +34,110 @@ class ProcessManager
     {
         $this->debugLog("Starting execution");
 
-        // Create temporary file for input
-        $tmpfname = tempnam(sys_get_temp_dir(), 'volt_');
-        $this->debugLog("Created temporary file: $tmpfname");
-
-        // Write config to temp file
-        file_put_contents($tmpfname, json_encode($config, JSON_PRETTY_PRINT));
-
-        // Build command with proper escaping
+        // Prepare command
         $cmd = escapeshellarg($this->binaryPath);
-        $this->debugLog("Executing command: $cmd");
+        $this->debugLog("Command: $cmd");
 
-        // Setup process
+        // Prepare config
+        $configJson = json_encode($config, JSON_PRETTY_PRINT);
+        $this->debugLog("Config prepared: " . substr($configJson, 0, 100) . "...");
+
+        // Start process
         $descriptorspec = [
-            0 => ['pipe', 'r'],  // stdin
-            1 => ['pipe', 'w'],  // stdout
-            2 => ['pipe', 'w']   // stderr
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w']
         ];
 
-        $cwd = dirname($this->binaryPath);
-        $env = ['VOLT_TEST_DEBUG' => '1'];
-
-        $this->debugLog("Opening process in directory: $cwd");
-
-        $process = proc_open($cmd, $descriptorspec, $pipes, $cwd, $env, [
+        $this->debugLog("Opening process");
+        $process = proc_open($cmd, $descriptorspec, $pipes, null, null, [
             'bypass_shell' => true,
             'create_process_group' => true
         ]);
 
         if (!is_resource($process)) {
-            unlink($tmpfname);
-            throw new RuntimeException("Failed to start process: $cmd");
+            throw new RuntimeException("Failed to start process");
         }
 
         $this->currentProcess = $process;
-        $this->debugLog("Process started successfully");
+        $this->debugLog("Process started");
+
+        // Set streams to non-blocking mode
+        foreach ($pipes as $pipe) {
+            stream_set_blocking($pipe, false);
+        }
 
         try {
-            // Write config to process
+            // Write config to stdin
             $this->debugLog("Writing config to process");
-            $configContent = file_get_contents($tmpfname);
-            fwrite($pipes[0], $configContent);
-            fclose($pipes[0]);
-            unlink($tmpfname);
+            $written = fwrite($pipes[0], $configJson);
+            if ($written === false) {
+                throw new RuntimeException("Failed to write config to process");
+            }
+            $this->debugLog("Wrote $written bytes to process");
 
-            // Set up non-blocking reads
-            stream_set_blocking($pipes[1], false);
-            stream_set_blocking($pipes[2], false);
+            // Important: flush and close stdin
+            fflush($pipes[0]);
+            fclose($pipes[0]);
+            $this->debugLog("Closed stdin pipe");
 
             $output = '';
-            $processRunning = true;
+            $startTime = time();
+            $lastDataTime = time();
 
-            $this->debugLog("Starting output reading loop");
-
-            while ($processRunning) {
+            while (true) {
                 $status = proc_get_status($process);
-                $processRunning = $status['running'];
-
-                $read = array_filter([$pipes[1], $pipes[2]], 'is_resource');
-                if (empty($read)) {
+                if (!$status['running']) {
+                    $this->debugLog("Process has finished");
                     break;
                 }
 
+                // Check timeout
+                if (time() - $startTime > $this->timeout) {
+                    throw new RuntimeException("Process timed out after {$this->timeout} seconds");
+                }
+
+                // Check for data timeout (no data received)
+                if (time() - $lastDataTime > 5) {
+                    $this->debugLog("No data received for 5 seconds, checking process status");
+                    $lastDataTime = time(); // Reset timer
+                }
+
+                $read = [$pipes[1], $pipes[2]];
                 $write = null;
                 $except = null;
 
-                if (stream_select($read, $write, $except, 0, 100000)) {
+                // Short timeout for select
+                if (stream_select($read, $write, $except, 0, 200000)) {
                     foreach ($read as $pipe) {
-                        $data = fread($pipe, 4096);
-
-                        if ($data === false || $data === '') {
+                        $data = fread($pipe, 8192);
+                        if ($data === false) {
                             continue;
                         }
-
-                        if ($pipe === $pipes[1]) {
-                            $output .= $data;
-                            if ($streamOutput) {
-                                fwrite(STDOUT, $data);
+                        if ($data !== '') {
+                            $lastDataTime = time();
+                            if ($pipe === $pipes[1]) {
+                                $output .= $data;
+                                if ($streamOutput) {
+                                    fwrite(STDOUT, $data);
+                                    flush();
+                                }
+                            } else {
+                                fwrite(STDERR, $data);
                                 flush();
                             }
-                        } else {
-                            fwrite(STDERR, $data);
-                            flush();
                         }
                     }
-                }
-
-                // Check if process has exited
-                if (!$processRunning) {
-                    $this->debugLog("Process has finished");
-                    break;
                 }
             }
 
             // Close remaining pipes
-            foreach ($pipes as $pipe) {
-                if (is_resource($pipe)) {
-                    fclose($pipe);
+            foreach ([1, 2] as $i) {
+                if (isset($pipes[$i]) && is_resource($pipes[$i])) {
+                    fclose($pipes[$i]);
                 }
             }
 
-            // Get exit code and close process
             $exitCode = proc_close($process);
             $this->debugLog("Process closed with exit code: $exitCode");
 
@@ -152,18 +150,20 @@ class ProcessManager
         } catch (\Exception $e) {
             $this->debugLog("Error occurred: " . $e->getMessage());
 
-            // Clean up
+            // Clean up pipes
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
                     fclose($pipe);
                 }
             }
 
+            // Terminate process if still running
             if (is_resource($process)) {
                 $status = proc_get_status($process);
                 if ($status['running']) {
+                    // Force kill on Windows
                     exec("taskkill /F /T /PID {$status['pid']} 2>&1", $output, $resultCode);
-                    $this->debugLog("Taskkill result: " . implode("\n", $output) . " (code: $resultCode)");
+                    $this->debugLog("Taskkill result code: $resultCode");
                 }
                 proc_close($process);
             }
