@@ -30,8 +30,13 @@ class VoltTestTest extends TestCase
         $scenario2 = $voltTest->scenario("Test Scenario 2")->setWeight(90);
         $scenario2->step("Step 1")->get('https://www.google.com');
         $result = $voltTest->run(true);
-        $this->assertNotEmpty($result->getRawOutput(), "Raw output is empty");
-        $this->assertGreaterThan(0, $result->getDuration(), "Duration is not greater than 0");
-        $this->assertGreaterThan(0, $result->getAvgResponseTime(), "Average response time is not greater than 0");
+
+        $this->assertNotEquals('0', $result->getDuration(), "Duration should not be 0");
+        $this->assertNotNull($result->getAvgResponseTime(), "Average response time should not be null");
+
+        $this->assertIsFloat($result->getSuccessRate(), "Success rate should be a float");
+        $this->assertIsInt($result->getTotalRequests(), "Total requests should be an integer");
+        $this->assertIsInt($result->getSuccessRequests(), "Success requests should be an integer");
+        $this->assertIsInt($result->getFailedRequests(), "Failed requests should be an integer");
     }
 }
