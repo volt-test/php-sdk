@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         php: [8.0 ,8.1 ,8.2, 8.3, 8.4]
 
     steps:
@@ -41,27 +41,6 @@ jobs:
           php -v
         shell: bash
 
-      # Setup PHP for Windows using WSL
-      - name: Enable WSL and Install PHP
-        if: matrix.os == 'windows-latest'
-        run: |
-          wsl --install -d Ubuntu
-          wsl sudo apt update
-          wsl sudo apt install -y php${{ matrix.php }} php${{ matrix.php }}-cli php${{ matrix.php }}-xml php${{ matrix.php }}-curl php${{ matrix.php }}-mbstring
-          wsl php -v
-        shell: pwsh
-
-      # Install Composer inside WSL
-      - name: Install Composer (Windows via WSL)
-        if: matrix.os == 'windows-latest'
-        run: |
-          wsl php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          wsl php composer-setup.php
-          wsl php -r "unlink('composer-setup.php');"
-          wsl sudo mv composer.phar /usr/local/bin/composer
-          wsl sudo chmod +x /usr/local/bin/composer
-          wsl composer -V
-        shell: pwsh
 
       - name: Get Composer Cache Directory
         id: composer-cache
