@@ -11,15 +11,26 @@ class ProcessManager
 
     public function __construct(string $binaryPath, bool $debug = true)
     {
-        $this->binaryPath = $binaryPath;
+        // Normalize path for Windows
+        $this->binaryPath = str_replace('/', '\\', $binaryPath);
         $this->debug = $debug;
-        $this->debugLog("ProcessManager initialized with binary: $binaryPath");
+
+        // Verify binary exists and is executable
+        if (!file_exists($this->binaryPath)) {
+            throw new RuntimeException("Binary not found at: {$this->binaryPath}");
+        }
+
+        if (!is_executable($this->binaryPath)) {
+            throw new RuntimeException("Binary is not executable: {$this->binaryPath}");
+        }
+
+        $this->debugLog("ProcessManager initialized with verified binary: {$this->binaryPath}");
     }
 
     private function debugLog(string $message): void
     {
         if ($this->debug) {
-            echo "[DEBUG] " . date('Y-m-d H:i:s') . " - $message\n";
+            fwrite(STDERR, "[DEBUG] " . date('Y-m-d H:i:s') . " - $message\n");
             flush();
         }
     }
@@ -28,70 +39,75 @@ class ProcessManager
     {
         $this->debugLog("Starting execution");
 
-        // For Windows, ensure the path is properly quoted
-        $cmd = PHP_OS_FAMILY === 'Windows'
-            ? '"' . str_replace('/', '\\', $this->binaryPath) . '"'
-            : $this->binaryPath;
-
-        $this->debugLog("Command to execute: $cmd");
-
         // Create temporary file for input
         $tmpfname = tempnam(sys_get_temp_dir(), 'volt_');
         $this->debugLog("Created temporary file: $tmpfname");
 
+        // Write config to temp file
         file_put_contents($tmpfname, json_encode($config, JSON_PRETTY_PRINT));
-        $this->debugLog("Written config to temporary file");
 
+        // Build command with proper escaping
+        $cmd = escapeshellarg($this->binaryPath);
+        $this->debugLog("Executing command: $cmd");
+
+        // Setup process
         $descriptorspec = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w']
+            0 => ['pipe', 'r'],  // stdin
+            1 => ['pipe', 'w'],  // stdout
+            2 => ['pipe', 'w']   // stderr
         ];
 
-        $this->debugLog("Opening process");
+        $cwd = dirname($this->binaryPath);
+        $env = ['VOLT_TEST_DEBUG' => '1'];
 
-        $process = proc_open($cmd, $descriptorspec, $pipes, null, null, [
+        $this->debugLog("Opening process in directory: $cwd");
+
+        $process = proc_open($cmd, $descriptorspec, $pipes, $cwd, $env, [
             'bypass_shell' => true,
             'create_process_group' => true
         ]);
 
         if (!is_resource($process)) {
             unlink($tmpfname);
-            throw new RuntimeException('Failed to start process');
+            throw new RuntimeException("Failed to start process: $cmd");
         }
 
         $this->currentProcess = $process;
         $this->debugLog("Process started successfully");
 
         try {
-            // Write config to stdin
+            // Write config to process
             $this->debugLog("Writing config to process");
-            fwrite($pipes[0], file_get_contents($tmpfname));
+            $configContent = file_get_contents($tmpfname);
+            fwrite($pipes[0], $configContent);
             fclose($pipes[0]);
             unlink($tmpfname);
 
-            $this->debugLog("Starting to read output");
-            $output = '';
-
-            // Set streams to non-blocking
+            // Set up non-blocking reads
             stream_set_blocking($pipes[1], false);
             stream_set_blocking($pipes[2], false);
 
-            while (true) {
-                $status = proc_get_status($process);
+            $output = '';
+            $processRunning = true;
 
-                if (!$status['running']) {
-                    $this->debugLog("Process has finished running");
+            $this->debugLog("Starting output reading loop");
+
+            while ($processRunning) {
+                $status = proc_get_status($process);
+                $processRunning = $status['running'];
+
+                $read = array_filter([$pipes[1], $pipes[2]], 'is_resource');
+                if (empty($read)) {
                     break;
                 }
 
-                $read = [$pipes[1], $pipes[2]];
                 $write = null;
                 $except = null;
 
                 if (stream_select($read, $write, $except, 0, 100000)) {
                     foreach ($read as $pipe) {
                         $data = fread($pipe, 4096);
+
                         if ($data === false || $data === '') {
                             continue;
                         }
@@ -99,7 +115,7 @@ class ProcessManager
                         if ($pipe === $pipes[1]) {
                             $output .= $data;
                             if ($streamOutput) {
-                                echo $data;
+                                fwrite(STDOUT, $data);
                                 flush();
                             }
                         } else {
@@ -108,9 +124,13 @@ class ProcessManager
                         }
                     }
                 }
-            }
 
-            $this->debugLog("Finished reading output");
+                // Check if process has exited
+                if (!$processRunning) {
+                    $this->debugLog("Process has finished");
+                    break;
+                }
+            }
 
             // Close remaining pipes
             foreach ($pipes as $pipe) {
@@ -119,7 +139,7 @@ class ProcessManager
                 }
             }
 
-            // Get exit code
+            // Get exit code and close process
             $exitCode = proc_close($process);
             $this->debugLog("Process closed with exit code: $exitCode");
 
@@ -142,12 +162,8 @@ class ProcessManager
             if (is_resource($process)) {
                 $status = proc_get_status($process);
                 if ($status['running']) {
-                    // Force kill on Windows
-                    if (PHP_OS_FAMILY === 'Windows') {
-                        exec('taskkill /F /T /PID ' . $status['pid']);
-                    } else {
-                        proc_terminate($process);
-                    }
+                    exec("taskkill /F /T /PID {$status['pid']} 2>&1", $output, $resultCode);
+                    $this->debugLog("Taskkill result: " . implode("\n", $output) . " (code: $resultCode)");
                 }
                 proc_close($process);
             }
