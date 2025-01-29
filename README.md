@@ -27,7 +27,6 @@ For detailed documentation, visit [https://php.volt-test.com](https://php.volt-t
 
 ## Features
 
-- Cross-platform support (Windows, Linux, MacOS)
 - Data Provider for Virtual Users
 - Comprehensive performance metrics
 - Multiple scenario support with weights
