@@ -30,7 +30,7 @@ class VoltTestTest extends TestCase
         $scenario2 = $voltTest->scenario("Test Scenario 2")->setWeight(90);
         $scenario2->step("Step 1")->get('https://www.google.com');
         $result = $voltTest->run(true);
-
+        var_dump($result->getDuration());
         $this->assertNotEquals('0', $result->getDuration(), "Duration should not be 0");
         $this->assertNotNull($result->getAvgResponseTime(), "Average response time should not be null");
 
