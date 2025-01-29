@@ -214,17 +214,4 @@ class Platform
 
         return $binaryPath;
     }
-
-    private static function needsUpdate(): bool
-    {
-        $binDir = self::getBinaryDir();
-        $versionFile = $binDir . '/.volt-test-version';
-
-        if (!file_exists($versionFile)) {
-            return true;
-        }
-
-        $currentVersion = trim(file_get_contents($versionFile));
-        return $currentVersion !== self::ENGINE_CURRENT_VERSION;
-    }
 }
