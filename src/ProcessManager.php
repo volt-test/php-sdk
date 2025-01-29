@@ -115,10 +115,13 @@ class ProcessManager
     private function handleProcess(array $pipes, bool $streamOutput): string
     {
         $output = '';
+        $timeout = DIRECTORY_SEPARATOR === '\\' ? 0 : 1;
 
         while (true) {
             $read = array_filter($pipes, 'is_resource');
             if (empty($read)) break;
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
 
             $write = $except = null;
 
@@ -168,11 +171,15 @@ class ProcessManager
             return -1;
         }
 
-        $status = proc_get_status($process);
-        if ($status['running']) {
+        // Windows-specific termination sequence
+        if (DIRECTORY_SEPARATOR === '\\') {
             proc_terminate($process);
+            usleep(100000); // Allow time for termination
+            $status = proc_get_status($process);
+            if ($status['running']) {
+                proc_terminate($process, SIGKILL);
+            }
         }
-
 
         return proc_close($process);
     }
