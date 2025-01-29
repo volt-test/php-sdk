@@ -10,7 +10,7 @@ class ProcessManager
     private bool $debug;
     private int $timeout = 30; // timeout in seconds
 
-    public function __construct(string $binaryPath, bool $debug = false)
+    public function __construct(string $binaryPath, bool $debug = true)
     {
         $this->binaryPath = str_replace('/', '\\', $binaryPath);
         $this->debug = $debug;
