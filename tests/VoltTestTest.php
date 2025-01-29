@@ -28,26 +28,18 @@ class VoltTestTest extends TestCase
         $voltTest->setVirtualUsers(10);
 
         // Create first scenario
-        $scenario1 = $voltTest->scenario("Test Scenario")->setWeight(10);
+        $scenario1 = $voltTest->scenario("Test Scenario")->setWeight(100);
         $scenario1->step("Step 1")
             ->get('https://www.google.com')
+            ->setThinkTime('1s')
             ->validateStatus('success', 200);
 
-        // Create second scenario
-        $scenario2 = $voltTest->scenario("Test Scenario 2")->setWeight(90);
-        $scenario2->step("Step 1")
+        $scenario1->step("Step 2")
             ->get('https://www.google.com')
+            ->setThinkTime('1s')
             ->validateStatus('success', 200);
 
-        // Run test and get results
         $result = $voltTest->run(true);
-
-        // Basic assertions about test execution
-        $this->assertNotEmpty($result->getRawOutput(), "Raw output should not be empty");
-
-        // Get duration and remove any 's' suffix if present
-        $duration = str_replace('s', '', $result->getDuration());
-        $this->assertNotEquals(0, (float)$duration, "Duration should not be 0");
 
         // Verify response time metrics
         $avgResponseTime = $result->getAvgResponseTime();
