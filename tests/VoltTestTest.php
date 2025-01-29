@@ -29,7 +29,7 @@ class VoltTestTest extends TestCase
         $scenario1->step("Step 1")->get('https://www.google.com');
         $scenario2 = $voltTest->scenario("Test Scenario 2")->setWeight(90);
         $scenario2->step("Step 1")->get('https://www.google.com');
-        $result = $voltTest->run();
+        $result = $voltTest->run(true);
         $this->assertNotEmpty($result->getRawOutput(), "Raw output is empty");
         $this->assertGreaterThan(0, $result->getDuration(), "Duration is not greater than 0");
         $this->assertGreaterThan(0, $result->getAvgResponseTime(), "Average response time is not greater than 0");
