@@ -34,8 +34,8 @@ jobs:
       - name: Setup PHP (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install php@${{ matrix.php }}
-          brew link php@${{ matrix.php }} --force
+          brew install php
+          brew link php --force
           php -v
         shell: bash
 
