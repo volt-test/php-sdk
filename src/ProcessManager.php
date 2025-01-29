@@ -34,20 +34,22 @@ class ProcessManager
     {
         $this->debugLog("Starting execution");
 
-        // Create temporary config file
-        $configFile = tempnam(sys_get_temp_dir(), 'volt_config_');
-        $this->debugLog("Created config file: $configFile");
+        // Create temporary directory for test files
+        $tempDir = rtrim(sys_get_temp_dir(), '/\\') . '\\volt_' . uniqid();
+        mkdir($tempDir);
+        $this->debugLog("Created temp directory: $tempDir");
 
-        // Write config to file
+        // Create config file
+        $configFile = $tempDir . '\\config.json';
         file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT));
-        $this->debugLog("Wrote config to file");
+        $this->debugLog("Wrote config to file: $configFile");
 
-        // Prepare command with config file argument
-        $cmd = sprintf(
-            '"%s" --config "%s"',
-            $this->binaryPath,
-            $configFile
-        );
+        // Change to temp directory and prepare command
+        $currentDir = getcwd();
+        chdir($tempDir);
+
+        // Prepare command without any flags - the binary should read config.json by default
+        $cmd = sprintf('"%s"', $this->binaryPath);
         $this->debugLog("Command: $cmd");
 
         // Start process
@@ -56,13 +58,13 @@ class ProcessManager
             2 => ['pipe', 'w']   // stderr
         ];
 
-        $this->debugLog("Opening process");
-        $process = proc_open($cmd, $descriptorspec, $pipes, null, null, [
-            'bypass_shell' => false  // Changed to false for Windows command
+        $this->debugLog("Opening process in directory: " . getcwd());
+        $process = proc_open($cmd, $descriptorspec, $pipes, $tempDir, null, [
+            'bypass_shell' => false
         ]);
 
         if (!is_resource($process)) {
-            unlink($configFile);
+            $this->cleanup($tempDir, $currentDir);
             throw new RuntimeException("Failed to start process");
         }
 
@@ -89,12 +91,6 @@ class ProcessManager
                 // Check timeout
                 if (time() - $startTime > $this->timeout) {
                     throw new RuntimeException("Process timed out after {$this->timeout} seconds");
-                }
-
-                // Check for data timeout
-                if (time() - $lastDataTime > 5) {
-                    $this->debugLog("No data received for 5 seconds, checking process");
-                    $lastDataTime = time();
                 }
 
                 $read = $pipes;
@@ -134,11 +130,8 @@ class ProcessManager
             $exitCode = proc_close($process);
             $this->debugLog("Process closed with exit code: $exitCode");
 
-            // Clean up config file
-            if (file_exists($configFile)) {
-                unlink($configFile);
-                $this->debugLog("Cleaned up config file");
-            }
+            // Restore original directory and cleanup
+            $this->cleanup($tempDir, $currentDir);
 
             if ($exitCode !== 0) {
                 throw new RuntimeException("Process failed with exit code $exitCode");
@@ -165,12 +158,26 @@ class ProcessManager
                 proc_close($process);
             }
 
-            // Clean up config file
-            if (file_exists($configFile)) {
-                unlink($configFile);
-            }
+            // Restore directory and cleanup
+            $this->cleanup($tempDir, $currentDir);
 
             throw $e;
+        }
+    }
+
+    private function cleanup(string $tempDir, string $currentDir): void
+    {
+        // Restore original directory
+        chdir($currentDir);
+
+        // Clean up temp directory
+        if (file_exists($tempDir)) {
+            $files = glob($tempDir . '/*');
+            foreach ($files as $file) {
+                unlink($file);
+            }
+            rmdir($tempDir);
+            $this->debugLog("Cleaned up temp directory");
         }
     }
 }
