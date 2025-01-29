@@ -44,6 +44,8 @@ class ProcessManager
         file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT));
         $this->debugLog("Wrote config to file: $configFile");
 
+        $this->debugLog("config file contain: " . file_get_contents($configFile));
+
         // Change to temp directory and prepare command
         $currentDir = getcwd();
         chdir($tempDir);
