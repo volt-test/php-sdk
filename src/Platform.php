@@ -212,6 +212,12 @@ class Platform
             self::installBinary();
         }
 
+        if (PHP_OS_FAMILY === 'Windows' && !is_executable($binaryPath)) {
+            @chmod($binaryPath, 0755);
+        }
+
+        return $binaryPath;
+
         return $binaryPath;
     }
 }

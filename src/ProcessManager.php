@@ -1,150 +1,57 @@
 <?php
 
 namespace VoltTest;
+
 use RuntimeException;
 
 class ProcessManager
 {
     private string $binaryPath;
+
     private $currentProcess = null;
-    private bool $debug;
-    private int $timeout = 30;
 
-    public function __construct(string $binaryPath, bool $debug = true)
+    public function __construct(string $binaryPath)
     {
-        $this->binaryPath = str_replace('/', '\\', $binaryPath);
-        $this->debug = $debug;
-
-        if (!file_exists($this->binaryPath)) {
-            throw new RuntimeException("Binary not found at: {$this->binaryPath}");
+        $this->binaryPath = $binaryPath;
+        if (DIRECTORY_SEPARATOR !== '\\' && function_exists('pcntl_async_signals')) {
+            pcntl_async_signals(true);
+            pcntl_signal(SIGINT, [$this, 'handleSignal']);
+            pcntl_signal(SIGTERM, [$this, 'handleSignal']);
         }
-
-        $this->debugLog("ProcessManager initialized with binary: {$this->binaryPath}");
     }
 
-    private function debugLog(string $message): void
+    private function handleSignal(int $signal): void
     {
-        if ($this->debug) {
-            fwrite(STDERR, "[DEBUG] " . date('Y-m-d H:i:s') . " - $message\n");
-            flush();
+        if ($this->currentProcess && is_resource($this->currentProcess)) {
+            proc_terminate($this->currentProcess);
+            proc_close($this->currentProcess);
         }
+        exit(0);
     }
 
     public function execute(array $config, bool $streamOutput): string
     {
-        $this->debugLog("Starting execution");
+        [$success, $process, $pipes] = $this->openProcess();
+        $this->currentProcess = $process;
 
-        // Create temporary directory for test files
-        $tempDir = rtrim(sys_get_temp_dir(), '/\\') . '\\volt_' . uniqid();
-        mkdir($tempDir);
-        $this->debugLog("Created temp directory: $tempDir");
-
-        // Create config file
-        $configFile = $tempDir . '\\config.json';
-        file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT));
-        $this->debugLog("Wrote config to file: $configFile");
-
-        $this->debugLog("config file contain: " . file_get_contents($configFile));
-
-        // Change to temp directory and prepare command
-        $currentDir = getcwd();
-        chdir($tempDir);
-
-        // Prepare command without any flags - the binary should read config.json by default
-        $cmd = sprintf('"%s"', $this->binaryPath);
-        $this->debugLog("Command: $cmd");
-
-        // Start process
-        $descriptorspec = [
-            1 => ['pipe', 'w'],  // stdout
-            2 => ['pipe', 'w']   // stderr
-        ];
-
-        $this->debugLog("Opening process in directory: " . getcwd());
-        $process = proc_open($cmd, $descriptorspec, $pipes, $tempDir, null, [
-            'bypass_shell' => false
-        ]);
-
-        if (!is_resource($process)) {
-            $this->cleanup($tempDir, $currentDir);
-            throw new RuntimeException("Failed to start process");
+        if (! $success || ! is_array($pipes)) {
+            throw new RuntimeException('Failed to start process of volt test');
         }
 
-        $this->currentProcess = $process;
-        $this->debugLog("Process started");
-
         try {
-            // Set streams to non-blocking mode
-            foreach ($pipes as $pipe) {
-                stream_set_blocking($pipe, false);
+            $this->writeInput($pipes[0], json_encode($config, JSON_PRETTY_PRINT));
+            fclose($pipes[0]);
+
+            $output = $this->handleProcess($pipes, $streamOutput);
+
+            // Store stderr content before closing
+            $stderrContent = '';
+            if (isset($pipes[2]) && is_resource($pipes[2])) {
+                rewind($pipes[2]);
+                $stderrContent = stream_get_contents($pipes[2]);
             }
 
-            $output = '';
-            $startTime = time();
-            $lastDataTime = time();
-
-            while (true) {
-                $status = proc_get_status($process);
-                if (!$status['running']) {
-                    $this->debugLog("Process has finished");
-                    break;
-                }
-
-                // Check timeout
-                if (time() - $startTime > $this->timeout) {
-                    throw new RuntimeException("Process timed out after {$this->timeout} seconds");
-                }
-
-                $read = $pipes;
-                $write = null;
-                $except = null;
-
-                if (stream_select($read, $write, $except, 0, 200000)) {
-                    foreach ($read as $pipe) {
-                        $data = fread($pipe, 8192);
-                        if ($data === false) {
-                            continue;
-                        }
-                        if ($data !== '') {
-                            $lastDataTime = time();
-                            if ($pipe === $pipes[1]) {
-                                $output .= $data;
-                                if ($streamOutput) {
-                                    fwrite(STDOUT, $data);
-                                    flush();
-                                }
-                            } else {
-                                fwrite(STDERR, $data);
-                                flush();
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Close pipes
-            foreach ($pipes as $pipe) {
-                if (is_resource($pipe)) {
-                    fclose($pipe);
-                }
-            }
-
-            $exitCode = proc_close($process);
-            $this->debugLog("Process closed with exit code: $exitCode");
-
-            // Restore original directory and cleanup
-            $this->cleanup($tempDir, $currentDir);
-
-            if ($exitCode !== 0) {
-                throw new RuntimeException("Process failed with exit code $exitCode");
-            }
-
-            return $output;
-
-        } catch (\Exception $e) {
-            $this->debugLog("Error occurred: " . $e->getMessage());
-
-            // Clean up
+            // Clean up pipes
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
                     fclose($pipe);
@@ -152,34 +59,121 @@ class ProcessManager
             }
 
             if (is_resource($process)) {
-                $status = proc_get_status($process);
-                if ($status['running']) {
-                    exec("taskkill /F /T /PID {$status['pid']} 2>&1", $killOutput, $resultCode);
-                    $this->debugLog("Taskkill result code: $resultCode");
+                $exitCode = $this->closeProcess($process);
+                $this->currentProcess = null;
+                if ($exitCode !== 0) {
+                    echo "\nError: " . trim($stderrContent) . "\n";
+
+                    return '';
                 }
-                proc_close($process);
             }
 
-            // Restore directory and cleanup
-            $this->cleanup($tempDir, $currentDir);
-
-            throw $e;
+            return $output;
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if (is_resource($process)) {
+                $this->closeProcess($process);
+                $this->currentProcess = null;
+            }
         }
     }
 
-    private function cleanup(string $tempDir, string $currentDir): void
+    protected function openProcess(): array
     {
-        // Restore original directory
-        chdir($currentDir);
+        $pipes = [];
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
 
-        // Clean up temp directory
-        if (file_exists($tempDir)) {
-            $files = glob($tempDir . '/*');
-            foreach ($files as $file) {
-                unlink($file);
-            }
-            rmdir($tempDir);
-            $this->debugLog("Cleaned up temp directory");
+        // Windows-specific: Remove bypass_shell to allow proper execution
+        $options = DIRECTORY_SEPARATOR === '\\'
+            ? []
+            : ['bypass_shell' => true];
+
+        $process = proc_open(
+            escapeshellcmd($this->binaryPath),
+            $descriptors,
+            $pipes,
+            null,
+            null,
+            $options
+        );
+
+        if (!is_resource($process)) {
+            return [false, null, []];
         }
+
+        return [true, $process, $pipes];
+    }
+
+    private function handleProcess(array $pipes, bool $streamOutput): string
+    {
+        $output = '';
+
+        while (true) {
+            $read = array_filter($pipes, 'is_resource');
+            if (empty($read)) break;
+
+            $write = $except = null;
+
+            // Windows: Add timeout to prevent infinite blocking
+            $timeout = DIRECTORY_SEPARATOR === '\\' ? 0 : 1;
+            $result = stream_select($read, $write, $except, $timeout);
+
+            if ($result === false) break;
+
+            foreach ($read as $pipe) {
+                $type = array_search($pipe, $pipes, true);
+                $data = fread($pipe, 4096);
+
+                if ($data === false || $data === '') {
+                    if (feof($pipe)) {
+                        fclose($pipe);
+                        unset($pipes[$type]);
+                        continue;
+                    }
+                }
+
+                if ($type === 1) { // stdout
+                    $output .= $data;
+                    if ($streamOutput) echo $data;
+                } elseif ($type === 2 && $streamOutput) { // stderr
+                    fwrite(STDERR, $data);
+                }
+            }
+
+            // Windows: Add small delay to prevent CPU spike
+            if (DIRECTORY_SEPARATOR === '\\') usleep(100000);
+        }
+
+        return $output;
+    }
+
+    protected function writeInput($pipe, string $input): void
+    {
+        if (is_resource($pipe)) {
+            fwrite($pipe, $input);
+        }
+    }
+
+    protected function closeProcess($process): int
+    {
+        if (! is_resource($process)) {
+            return -1;
+        }
+
+        $status = proc_get_status($process);
+        if ($status['running']) {
+            proc_terminate($process);
+        }
+
+
+        return proc_close($process);
     }
 }
