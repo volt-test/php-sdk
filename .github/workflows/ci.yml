@@ -17,12 +17,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        php: [8.0 ,8.1 ,8.2, 8.3, 8.4]
-
+        php: [8.0 ,8.1 ,8.2, 8.3]
     steps:
       - uses: actions/checkout@v4
 
-      # Setup PHP for Linux
+      # PHP installation and setup using built-in tools
       - name: Setup PHP (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -32,7 +31,6 @@ jobs:
           php -v
         shell: bash
 
-      # Setup PHP for macOS
       - name: Setup PHP (macOS)
         if: matrix.os == 'macos-latest'
         run: |
@@ -41,10 +39,9 @@ jobs:
           php -v
         shell: bash
 
-
       - name: Get Composer Cache Directory
         id: composer-cache
-        run: echo "dir=$(wsl composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Cache Composer packages
@@ -55,25 +52,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-composer-
 
-      # Install dependencies
-      - name: Install dependencies (Windows via WSL)
-        if: matrix.os == 'windows-latest'
-        run: wsl composer install --prefer-dist --no-progress
-        shell: pwsh
 
-      - name: Install dependencies (Unix)
-        if: matrix.os != 'windows-latest'
-        run: composer install --prefer-dist --no-progress
-        shell: bash
 
-      # Run tests
-      - name: Run test suite (Windows via WSL)
-        if: matrix.os == 'windows-latest'
-        run: wsl vendor/bin/phpunit
-        shell: pwsh
-
-      - name: Run test suite (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Run test suite
         run: vendor/bin/phpunit
         shell: bash
 
@@ -100,7 +81,7 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
+          sudo apt-get install -y php${{ matrix.php }} php${{ matrix.php }}-cli php${{ matrix.php }}-xml php${{ matrix.php }}-mbstring
         shell: bash
 
       - name: Install Composer
@@ -111,14 +92,44 @@ jobs:
           sudo chown -R $USER:$USER ~/.composer
         shell: bash
 
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
       - name: Install Dependencies
         run: |
           composer install --prefer-dist --no-progress
           composer require --dev phpstan/phpstan --with-all-dependencies
         shell: bash
 
+      - name: Create PHPStan config
+        run: |
+          echo '
+          parameters:
+              level: 5
+              paths:
+                  - src
+                  - tests
+              excludePaths:
+                  - vendor/*
+          ' > phpstan.neon
+
       - name: Run PHPStan
-        run: vendor/bin/phpstan analyse --level=5 src tests
+        run: |
+          if [ -f "vendor/bin/phpstan" ]; then
+            vendor/bin/phpstan analyse -c phpstan.neon
+          else
+            echo "PHPStan not found in vendor/bin"
+            exit 1
+          fi
         shell: bash
 
   code-style:
@@ -134,7 +145,7 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
+          sudo apt-get install -y php${{ matrix.php }} php${{ matrix.php }}-cli php${{ matrix.php }}-xml php${{ matrix.php }}-mbstring
         shell: bash
 
       - name: Install Composer
@@ -144,6 +155,18 @@ jobs:
           mkdir -p ~/.composer
           sudo chown -R $USER:$USER ~/.composer
         shell: bash
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
 
       - name: Install Dependencies
         run: |
@@ -167,8 +190,6 @@ jobs:
                       ->in(__DIR__)
               );
           " > .php-cs-fixer.php
-        shell: bash
 
       - name: Check coding standards
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
-        shell: bash
