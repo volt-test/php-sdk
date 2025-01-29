@@ -18,67 +18,54 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         php: [8.0 ,8.1 ,8.2, 8.3, 8.4]
+
     steps:
       - uses: actions/checkout@v4
 
-      # PHP installation and setup using built-in tools
+      # Setup PHP for Linux
       - name: Setup PHP (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
+          sudo apt-get install -y php${{ matrix.php }} php${{ matrix.php }}-cli php${{ matrix.php }}-xml php${{ matrix.php }}-curl php${{ matrix.php }}-mbstring
           php -v
         shell: bash
 
+      # Setup PHP for macOS
       - name: Setup PHP (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install php@8.2
-          brew link php@8.2 --force
+          brew install php@${{ matrix.php }}
+          brew link php@${{ matrix.php }} --force
           php -v
         shell: bash
 
-      - name: Setup PHP (Windows)
+      # Setup PHP for Windows using WSL
+      - name: Enable WSL and Install PHP
         if: matrix.os == 'windows-latest'
         run: |
-          choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
-          refreshenv
-          # Download CA bundle
-          Invoke-WebRequest -Uri https://curl.se/ca/cacert.pem -OutFile C:\tools\cacert.pem
-          # Configure PHP to use the CA bundle
-          $phpIni = php --ini | Select-String "Loaded Configuration File" | ForEach-Object { $_.Line.Split()[-1] }
-          Add-Content $phpIni "`nopenssl.cafile = C:\tools\cacert.pem"
-          php -v
+          wsl --install -d Ubuntu
+          wsl sudo apt update
+          wsl sudo apt install -y php${{ matrix.php }} php${{ matrix.php }}-cli php${{ matrix.php }}-xml php${{ matrix.php }}-curl php${{ matrix.php }}-mbstring
+          wsl php -v
         shell: pwsh
 
-      - name: Install Composer (Windows)
+      # Install Composer inside WSL
+      - name: Install Composer (Windows via WSL)
         if: matrix.os == 'windows-latest'
         run: |
-          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          php composer-setup.php
-          php -r "unlink('composer-setup.php');"
-          mkdir -p C:\tools\composer
-          move composer.phar C:\tools\composer\composer
-          echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          wsl php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          wsl php composer-setup.php
+          wsl php -r "unlink('composer-setup.php');"
+          wsl sudo mv composer.phar /usr/local/bin/composer
+          wsl sudo chmod +x /usr/local/bin/composer
+          wsl composer -V
         shell: pwsh
-
-      - name: Install Composer (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-          php -r "unlink('composer-setup.php');"
-          sudo chmod +x /usr/local/bin/composer
-          mkdir -p ~/.composer
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo chown -R $USER:$USER ~/.composer
-          fi
-        shell: bash
 
       - name: Get Composer Cache Directory
         id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        run: echo "dir=$(wsl composer config cache-files-dir)" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Cache Composer packages
@@ -89,17 +76,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-composer-
 
-      - name: Install dependencies (Windows)
+      # Install dependencies
+      - name: Install dependencies (Windows via WSL)
         if: matrix.os == 'windows-latest'
-        run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
-        shell: bash
+        run: wsl composer install --prefer-dist --no-progress
+        shell: pwsh
 
       - name: Install dependencies (Unix)
         if: matrix.os != 'windows-latest'
         run: composer install --prefer-dist --no-progress
         shell: bash
 
-      - name: Run test suite
+      # Run tests
+      - name: Run test suite (Windows via WSL)
+        if: matrix.os == 'windows-latest'
+        run: wsl vendor/bin/phpunit
+        shell: pwsh
+
+      - name: Run test suite (Unix)
+        if: matrix.os != 'windows-latest'
         run: vendor/bin/phpunit
         shell: bash
 
@@ -126,7 +121,7 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
+          sudo apt install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
         shell: bash
 
       - name: Install Composer
@@ -137,44 +132,14 @@ jobs:
           sudo chown -R $USER:$USER ~/.composer
         shell: bash
 
-      - name: Get Composer Cache Directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer packages
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
-
       - name: Install Dependencies
         run: |
           composer install --prefer-dist --no-progress
           composer require --dev phpstan/phpstan --with-all-dependencies
         shell: bash
 
-      - name: Create PHPStan config
-        run: |
-          echo '
-          parameters:
-              level: 5
-              paths:
-                  - src
-                  - tests
-              excludePaths:
-                  - vendor/*
-          ' > phpstan.neon
-
       - name: Run PHPStan
-        run: |
-          if [ -f "vendor/bin/phpstan" ]; then
-            vendor/bin/phpstan analyse -c phpstan.neon
-          else
-            echo "PHPStan not found in vendor/bin"
-            exit 1
-          fi
+        run: vendor/bin/phpstan analyse --level=5 src tests
         shell: bash
 
   code-style:
@@ -190,7 +155,7 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
+          sudo apt install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
         shell: bash
 
       - name: Install Composer
@@ -200,18 +165,6 @@ jobs:
           mkdir -p ~/.composer
           sudo chown -R $USER:$USER ~/.composer
         shell: bash
-
-      - name: Get Composer Cache Directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer packages
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
 
       - name: Install Dependencies
         run: |
@@ -235,6 +188,8 @@ jobs:
                       ->in(__DIR__)
               );
           " > .php-cs-fixer.php
+        shell: bash
 
       - name: Check coding standards
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
+        shell: bash
