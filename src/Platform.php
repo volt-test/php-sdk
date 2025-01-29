@@ -77,8 +77,6 @@ class Platform
         }
         $os = strtolower(PHP_OS);
         $arch = php_uname('m');
-        $arch = str_replace(['AMD64', 'AWD64'], 'amd64', $arch);
-        $arch = strtolower($arch);
 
         if (strpos($os, 'win') === 0) {
             $os = 'windows';
@@ -213,12 +211,6 @@ class Platform
         if ($needsInstall) {
             self::installBinary();
         }
-
-        if (PHP_OS_FAMILY === 'Windows' && !is_executable($binaryPath)) {
-            @chmod($binaryPath, 0755);
-        }
-
-        return $binaryPath;
 
         return $binaryPath;
     }
