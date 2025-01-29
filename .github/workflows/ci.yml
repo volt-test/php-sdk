@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        php: [8.0 ,8.1 ,8.2, 8.3]
+        php: [8.0 ,8.1 ,8.2, 8.3, 8.4]
     steps:
       - uses: actions/checkout@v4
 
@@ -27,16 +27,53 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt-get install -y php php-cli php-xml php-curl php-mbstring
+          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
           php -v
         shell: bash
 
       - name: Setup PHP (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install php
-          brew link php --force
+          brew install php@8.2
+          brew link php@8.2 --force
           php -v
+        shell: bash
+
+      - name: Setup PHP (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install php --version=8.2 --params '"/ExtensionList:mbstring,curl,openssl,xml"'
+          refreshenv
+          # Download CA bundle
+          Invoke-WebRequest -Uri https://curl.se/ca/cacert.pem -OutFile C:\tools\cacert.pem
+          # Configure PHP to use the CA bundle
+          $phpIni = php --ini | Select-String "Loaded Configuration File" | ForEach-Object { $_.Line.Split()[-1] }
+          Add-Content $phpIni "`nopenssl.cafile = C:\tools\cacert.pem"
+          php -v
+        shell: pwsh
+
+      - name: Install Composer (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          php composer-setup.php
+          php -r "unlink('composer-setup.php');"
+          mkdir -p C:\tools\composer
+          move composer.phar C:\tools\composer\composer
+          echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install Composer (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          php -r "unlink('composer-setup.php');"
+          sudo chmod +x /usr/local/bin/composer
+          mkdir -p ~/.composer
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo chown -R $USER:$USER ~/.composer
+          fi
         shell: bash
 
       - name: Get Composer Cache Directory
@@ -52,7 +89,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-composer-
 
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-pcntl
+        shell: bash
 
+      - name: Install dependencies (Unix)
+        if: matrix.os != 'windows-latest'
+        run: composer install --prefer-dist --no-progress
+        shell: bash
 
       - name: Run test suite
         run: vendor/bin/phpunit
@@ -81,7 +126,7 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt-get install -y php php-cli php-xml php-mbstring
+          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
         shell: bash
 
       - name: Install Composer
@@ -145,7 +190,7 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ondrej/php
           sudo apt-get update
-          sudo apt-get install -y php php-cli php-xml php-mbstring
+          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
         shell: bash
 
       - name: Install Composer
