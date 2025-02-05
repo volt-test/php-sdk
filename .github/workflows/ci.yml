@@ -105,9 +105,9 @@ jobs:
 
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.os }}
+          name: test-results-${{ matrix.os }}-${{ matrix.php }}
           path: |
             ./build/logs
             ./phpunit.xml
