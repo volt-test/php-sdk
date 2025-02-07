@@ -9,6 +9,7 @@ class ProcessManager
     private string $binaryPath;
 
     private $currentProcess = null;
+    private mixed $pipes;
 
     public function __construct(string $binaryPath)
     {
@@ -20,12 +21,33 @@ class ProcessManager
         }
     }
 
-    private function handleSignal(int $signal): void
+    public function handleSignal(int $signal): void
     {
         if ($this->currentProcess && is_resource($this->currentProcess)) {
-            proc_terminate($this->currentProcess);
+            // Send SIGTERM to the process
+            proc_terminate($this->currentProcess, SIGTERM);
+
+            // Wait a bit for it to exit gracefully
+            sleep(1);
+
+            // Capture final output before closing the process
+            $output = '';
+            if ($this->pipes && isset($this->pipes[1]) && is_resource($this->pipes[1])) {
+                stream_set_blocking($this->pipes[1], false); // Ensure non-blocking mode
+                $output = stream_get_contents($this->pipes[1]);
+                fclose($this->pipes[1]);
+            }
+
+            // Ensure the process is closed
             proc_close($this->currentProcess);
+            $this->currentProcess = null;
+
+            // Print the final output
+            if (!empty($output)) {
+                echo "\n$output\n";
+            }
         }
+
         exit(0);
     }
 
@@ -33,6 +55,7 @@ class ProcessManager
     {
         [$success, $process, $pipes] = $this->openProcess();
         $this->currentProcess = $process;
+        $this->pipes = $pipes;
 
         if (! $success || ! is_array($pipes)) {
             throw new RuntimeException('Failed to start process of volt test');
@@ -109,6 +132,10 @@ class ProcessManager
     {
         $output = '';
 
+        // Set non-blocking mode for stdout and stderr
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
         while (true) {
             $read = array_filter($pipes, 'is_resource');
             if (empty($read)) {
@@ -130,7 +157,6 @@ class ProcessManager
                     if (feof($pipe)) {
                         fclose($pipe);
                         unset($pipes[$type]);
-
                         continue;
                     }
                 }
