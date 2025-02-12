@@ -6,7 +6,7 @@ class Platform
 {
     private const BINARY_NAME = 'volt-test';
 
-    private const ENGINE_CURRENT_VERSION = 'v0.1.1';
+    private const ENGINE_CURRENT_VERSION = 'v0.9.1';
     private const BASE_DOWNLOAD_URL = 'https://github.com/volt-test/binaries/releases/download';
     private const SUPPORTED_PLATFORMS = [
         'linux-amd64' => 'volt-test-linux-amd64',
