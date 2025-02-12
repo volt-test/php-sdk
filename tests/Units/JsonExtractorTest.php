@@ -46,6 +46,9 @@ class JsonExtractorTest extends TestCase
             ['with_underscore'],
             ['with.numbers.123'],
             ['mixed.path_with.numbers123'],
+            ['mixed[0].path'],
+            ['mixed[0].path[1]'],
+            ['mixed[0].path[1].with[2].numbers[3]'],
         ];
     }
 
@@ -67,6 +70,12 @@ class JsonExtractorTest extends TestCase
             ['$invalid.start'],
             ['invalid$.middle'],
             ['path.with.$'],
+            ['$.data[abc]'],
+            ['$.data[0].name[abc]'],
+            ['$.data[0].name[0].'],
+            ['$.data[0].name[0].[1]'],
+            ['$.data[0].name[0].[1].'],
+            ['$.data[0].name[0].[1].name'],
         ];
     }
 

@@ -2,7 +2,7 @@
   "name": "volt-test/php-sdk",
   "description": "Volt Test PHP SDK - A performance testing tool for PHP applications",
   "type": "library",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "keywords": [
     "volt-test",
     "php-sdk",
