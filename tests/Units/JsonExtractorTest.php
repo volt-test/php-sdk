@@ -57,7 +57,7 @@ class JsonExtractorTest extends TestCase
     {
         $this->expectException(InvalidJsonPathException::class);
         $extractor = new JsonExtractor('testVar', $jsonPath);
-        $extractor->validate(true);
+        $extractor->validate();
     }
 
     public static function invalidJsonPathProvider(): array
