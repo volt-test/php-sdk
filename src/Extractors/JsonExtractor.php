@@ -44,10 +44,11 @@ class JsonExtractor implements Extractor
         if (empty($this->selector) || $this->selector === '$.') {
             throw new InvalidJsonPathException('JSON path cannot be empty');
         }
-        // Validate the selector ex: $.meta.token
+        // Validate the selector ex: $.meta.token or $.data[0].name
         // Validate the selector follows proper JSON path format
         // Should start with $ followed by dot and valid path segments
-        if (! preg_match('/^\$(\.[a-zA-Z0-9_]+)*$/', $this->selector)) {
+        $pattern = '/^\$(\.[a-zA-Z0-9_]+|\[[0-9]+\])*$/';
+        if (! preg_match($pattern, $this->selector)) {
             throw new InvalidJsonPathException('Invalid JSON path');
         }
 
