@@ -117,6 +117,37 @@ class StepTest extends TestCase
         $this->assertEquals('json', $extract['type']);
     }
 
+    public function testExtractFromHtml(): void
+    {
+        $this->step->get(self::TEST_URL)
+            ->extractFromHtml('userId', 'div#user-id');
+        $stepArray = $this->step->toArray();
+        $extract = $stepArray['extract'][0];
+        $this->assertEquals('userId', $extract['variable_name']);
+        $this->assertEquals('div#user-id', $extract['selector']);
+        $this->assertEquals('html', $extract['type']);
+    }
+
+
+    public function testExtractFromHtmlWithAttribute(): void
+    {
+        $this->step->get(self::TEST_URL)
+            ->extractFromHtml('userId', 'div#user-id', 'data-id');
+        $stepArray = $this->step->toArray();
+        $extract = $stepArray['extract'][0];
+        $this->assertEquals('userId', $extract['variable_name']);
+        $this->assertEquals('div#user-id', $extract['selector']);
+        $this->assertEquals('html', $extract['type']);
+    }
+
+    public function testExtractFromHtmlThrowsException(): void
+    {
+        $this->expectException(VoltTestException::class);
+        $this->step->get(self::TEST_URL)
+            ->extractFromHtml('userId', '#div#user-id', '');
+        $this->step->toArray();
+    }
+
     public function testInvalidJsonPathThrowsException(): void
     {
         $this->expectException(InvalidJsonPathException::class);
