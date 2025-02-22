@@ -10,6 +10,7 @@ use VoltTest\Exceptions\VoltTestException;
 use VoltTest\Extractors\CookieExtractor;
 use VoltTest\Extractors\Extractor;
 use VoltTest\Extractors\HeaderExtractor;
+use VoltTest\Extractors\HtmlExtractor;
 use VoltTest\Extractors\JsonExtractor;
 use VoltTest\Extractors\RegexExtractor;
 use VoltTest\Validators\StatusValidator;
@@ -188,6 +189,14 @@ class Step
         $regexExtractor->validate();
         $this->extracts[] = $regexExtractor;
 
+        return $this;
+    }
+
+
+    public function extractFromHtml(string $variableName, string $selector, ?string $attribute = null): self
+    {
+        $htmlExtractor = new HtmlExtractor($variableName, $selector, $attribute);
+        $this->extracts[] = $htmlExtractor;
         return $this;
     }
 
