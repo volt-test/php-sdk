@@ -4,14 +4,14 @@ VoltTest is a high-performance PHP performance testing SDK powered by a Golang e
 It combines PHP’s simplicity with Go’s speed and concurrency, allowing you to define, run, and analyze tests with an intuitive API while leveraging Go for efficient load generation.
 
 ## Features
-- [x] Multiple Scenario Support with Weights – Run different test scenarios with custom weight distributions.
-- [x] Data Provider for Virtual Users - Assign dynamic data to virtual users for realistic test simulations.
-- [x] Extract Data from Requests – Capture and reuse response data in subsequent requests.
-- [x] Request Customization & Response Validation – Modify headers, payloads, and assert results.
-- [x] Think Time & Ramp-Up Configuration – Simulate real-user behavior.
-- [x] Detailed Reports & Distributed Execution – Scale tests and analyze results.
-- [x] Debug Requests - Inspect and troubleshoot request/response payloads easily.
-- [ ] Cloud Execution – Seamless cloud-based testing in progress.
+- [x] **Multiple Scenario Support with Weights** – Run different test scenarios with custom weight distributions.
+- [x] **Data Provider for Virtual Users** - Assign dynamic data to virtual users for realistic test simulations.
+- [x] **Extract Data from Requests** – Capture and reuse response data in subsequent requests.
+- [x] **Request Customization & Response Validation** – Modify headers, payloads, and assert results.
+- [x] **Think Time & Ramp-Up Configuration** – Simulate real-user behavior.
+- [x] **Detailed Reports & Distributed Execution** – Scale tests and analyze results.
+- [x] **Debug Requests** - Inspect and troubleshoot request/response payloads easily.
+- [ ] **Cloud Execution** – Seamless cloud-based testing in progress.
 
 
 ## Architecture
