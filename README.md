@@ -1,10 +1,18 @@
 # VoltTest PHP SDK
 
-VoltTest is a powerful, easy-to-use performance testing SDK for PHP applications.
-Powered by a high-performance Golang engine running behind the scenes,
-it combines the ease of use of PHP with the raw power and concurrency capabilities of Go.
-This unique architecture enables you to create, run, and analyze performance tests with a fluent,
-intuitive API while leveraging Go's superior performance characteristics for the actual load generation.
+VoltTest is a high-performance PHP performance testing SDK powered by a Golang engine.
+It combines PHP’s simplicity with Go’s speed and concurrency, allowing you to define, run, and analyze tests with an intuitive API while leveraging Go for efficient load generation.
+
+## Features
+- [x] Multiple Scenario Support with Weights – Run different test scenarios with custom weight distributions.
+- [x] Data Provider for Virtual Users - Assign dynamic data to virtual users for realistic test simulations.
+- [x] Extract Data from Requests – Capture and reuse response data in subsequent requests.
+- [x] Request Customization & Response Validation – Modify headers, payloads, and assert results.
+- [x] Think Time & Ramp-Up Configuration – Simulate real-user behavior.
+- [x] Detailed Reports & Distributed Execution – Scale tests and analyze results.
+- [x] Debug Requests - Inspect and troubleshoot request/response payloads easily.
+- [ ] Cloud Execution – Seamless cloud-based testing in progress.
+
 
 ## Architecture
 VoltTest PHP SDK works as a bridge between your PHP application and the VoltTest Engine (written in Go). When you run a test:
@@ -24,20 +32,6 @@ Accurate timing and metrics collection
 ## Documentation
 
 For detailed documentation, visit [https://php.volt-test.com](https://php.volt-test.com)
-
-## Features
-
-- Data Provider for Virtual Users
-- Comprehensive performance metrics
-- Multiple scenario support with weights
-- Request customization
-- Response validation
-- Think time simulation
-- Ramp-up configuration
-- Progress tracking
-- Detailed reports
-- Debug Requests
-- Easy-to-use API
 
 ## Requirements
 
