@@ -2,7 +2,9 @@
 
 namespace Tests\Units;
 
-class HtmlExtractorTest extends \PHPUnit\Framework\TestCase
+use PHPUnit\Framework\TestCase;
+
+class HtmlExtractorTest extends TestCase
 {
     private \VoltTest\Extractors\HtmlExtractor $htmlExtractor;
 
