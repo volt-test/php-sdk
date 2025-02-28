@@ -6,14 +6,12 @@ class Platform
 {
     private const BINARY_NAME = 'volt-test';
 
-    private const ENGINE_CURRENT_VERSION = 'v0.9.2';
+    private const ENGINE_CURRENT_VERSION = 'v1.0.0';
     private const BASE_DOWNLOAD_URL = 'https://github.com/volt-test/binaries/releases/download';
     private const SUPPORTED_PLATFORMS = [
         'linux-amd64' => 'volt-test-linux-amd64',
         'darwin-amd64' => 'volt-test-darwin-amd64',
         'darwin-arm64' => 'volt-test-darwin-arm64',
-        'windows-amd64' => 'volt-test-windows-amd64.exe',
-        'windows-AMD64' => 'volt-test-windows-amd64.exe',
     ];
 
     private static function getVendorDir(): string
