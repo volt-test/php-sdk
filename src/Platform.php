@@ -10,6 +10,7 @@ class Platform
     private const BASE_DOWNLOAD_URL = 'https://github.com/volt-test/binaries/releases/download';
     private const SUPPORTED_PLATFORMS = [
         'linux-amd64' => 'volt-test-linux-amd64',
+        'linux-arm64' => 'volt-test-linux-arm64',
         'darwin-amd64' => 'volt-test-darwin-amd64',
         'darwin-arm64' => 'volt-test-darwin-arm64',
     ];
