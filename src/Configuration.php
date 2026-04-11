@@ -18,6 +18,8 @@ class Configuration
 
     private array $target;
 
+    private string $httpTimeout = '';
+
     private bool $httpDebug = false;
 
     public function __construct(string $name, string $description = '')
@@ -47,6 +49,9 @@ class Configuration
         }
         if (trim($this->duration) !== '') {
             $array['duration'] = $this->duration;
+        }
+        if (trim($this->httpTimeout) !== '') {
+            $array['http_timeout'] = $this->httpTimeout;
         }
 
         return $array;
@@ -88,6 +93,16 @@ class Configuration
             throw new VoltTestException('Invalid idle timeout format. Use <number>[s|m|h]');
         }
         $this->target['idle_timeout'] = $idleTimeout;
+
+        return $this;
+    }
+
+    public function setHttpTimeout(string $httpTimeout): self
+    {
+        if (! preg_match('/^\d+[smh]$/', $httpTimeout)) {
+            throw new VoltTestException('Invalid HTTP timeout format. Use <number>[s|m|h]');
+        }
+        $this->httpTimeout = $httpTimeout;
 
         return $this;
     }

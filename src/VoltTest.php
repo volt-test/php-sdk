@@ -68,6 +68,22 @@ class VoltTest
         return $this;
     }
 
+    /**
+     * Set the HTTP request timeout (per-request)
+     * @param string $timeout e.g. "60s", "2m" — default is 30s
+     * @return $this
+     * @throws VoltTestException
+     */
+    public function setHttpTimeout(string $timeout): self
+    {
+        if (! preg_match('/^\d+[smh]$/', $timeout)) {
+            throw new VoltTestException('Invalid HTTP timeout format. Use <number>[s|m|h]');
+        }
+        $this->config->setHttpTimeout($timeout);
+
+        return $this;
+    }
+
     public function setHttpDebug(bool $httpDebug): self
     {
         $this->config->setHttpDebug($httpDebug);
