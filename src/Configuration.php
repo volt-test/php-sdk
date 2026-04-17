@@ -22,6 +22,9 @@ class Configuration
 
     private bool $httpDebug = false;
 
+    /** @var Stage[] */
+    private array $stages = [];
+
     public function __construct(string $name, string $description = '')
     {
         $this->name = $name;
@@ -40,16 +43,24 @@ class Configuration
         $array = [
             'name' => $this->name,
             'description' => $this->description,
-            'virtual_users' => $this->virtualUsers,
             'target' => $this->target,
             'http_debug' => $this->httpDebug,
         ];
-        if (trim($this->rampUp) !== '') {
-            $array['ramp_up'] = $this->rampUp;
+
+        if (count($this->stages) > 0) {
+            // Stages mode: omit virtual_users, duration, ramp_up
+            $array['stages'] = array_map(fn (Stage $s) => $s->toArray(), $this->stages);
+        } else {
+            // Constant mode
+            $array['virtual_users'] = $this->virtualUsers;
+            if (trim($this->rampUp) !== '') {
+                $array['ramp_up'] = $this->rampUp;
+            }
+            if (trim($this->duration) !== '') {
+                $array['duration'] = $this->duration;
+            }
         }
-        if (trim($this->duration) !== '') {
-            $array['duration'] = $this->duration;
-        }
+
         if (trim($this->httpTimeout) !== '') {
             $array['http_timeout'] = $this->httpTimeout;
         }
@@ -112,5 +123,25 @@ class Configuration
         $this->httpDebug = $httpDebug;
 
         return $this;
+    }
+
+    /**
+     * @throws VoltTestException
+     */
+    public function addStage(string $duration, int $target): self
+    {
+        $this->stages[] = new Stage($duration, $target);
+
+        return $this;
+    }
+
+    public function hasStages(): bool
+    {
+        return count($this->stages) > 0;
+    }
+
+    public function hasConstantLoad(): bool
+    {
+        return $this->virtualUsers > 1 || trim($this->duration) !== '' || trim($this->rampUp) !== '';
     }
 }

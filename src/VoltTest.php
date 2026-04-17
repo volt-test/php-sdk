@@ -31,6 +31,9 @@ class VoltTest
         if ($count < 1) {
             throw new VoltTestException('Virtual users count must be at least 1');
         }
+        if ($this->config->hasStages()) {
+            throw new VoltTestException('Cannot use setVirtualUsers with stages. Stages define the full load profile.');
+        }
         $this->config->setVirtualUsers($count);
 
         return $this;
@@ -46,6 +49,9 @@ class VoltTest
     {
         if (! preg_match('/^\d+[smh]$/', $duration)) {
             throw new VoltTestException('Invalid duration format. Use <number>[s|m|h]');
+        }
+        if ($this->config->hasStages()) {
+            throw new VoltTestException('Cannot use setDuration with stages. Stages define the full load profile.');
         }
         $this->config->setDuration($duration);
 
@@ -63,7 +69,30 @@ class VoltTest
         if (! preg_match('/^\d+[smh]$/', $rampUp)) {
             throw new VoltTestException('Invalid ramp-up format. Use <number>[s|m|h]');
         }
+        if ($this->config->hasStages()) {
+            throw new VoltTestException('Cannot use setRampUp with stages. Stages define the full load profile.');
+        }
         $this->config->setRampUp($rampUp);
+
+        return $this;
+    }
+
+    /**
+     * Add a stage to the load profile.
+     * Each stage linearly ramps from the previous target to this target over the given duration.
+     * Stages are mutually exclusive with setVirtualUsers/setDuration/setRampUp.
+     *
+     * @param string $duration Duration of this stage (e.g. "5m", "30s", "1h")
+     * @param int $target Target VU count at the end of this stage
+     * @return $this
+     * @throws VoltTestException
+     */
+    public function stage(string $duration, int $target): self
+    {
+        if ($this->config->hasConstantLoad()) {
+            throw new VoltTestException('Cannot use stages with setVirtualUsers/setDuration/setRampUp. Use stages to define the full load profile.');
+        }
+        $this->config->addStage($duration, $target);
 
         return $this;
     }
