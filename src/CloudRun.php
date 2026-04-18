@@ -4,7 +4,7 @@ namespace VoltTest;
 
 class CloudRun
 {
-    private const DASHBOARD_BASE_URL = 'https://app.volt-test.com';
+    private const DASHBOARD_BASE_URL = 'https://volt-test.com';
 
     private string $runId;
 
