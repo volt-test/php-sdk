@@ -264,7 +264,7 @@ class VoltTestCloudTest extends TestCase
         $testable->run(false);
         $output = ob_get_clean();
 
-        $this->assertStringContainsString('https://app.volt-test.com/runs/run-abc', $output);
+        $this->assertStringContainsString('https://volt-test.com/runs/run-abc', $output);
         $this->assertStringContainsString('Test completed', $output);
     }
 

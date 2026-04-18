@@ -20,14 +20,14 @@ class CloudRunTest extends TestCase
     {
         $run = new CloudRun('run-abc-123', 'test-456', 'running');
 
-        $this->assertEquals('https://app.volt-test.com/runs/run-abc-123', $run->getDashboardUrl());
+        $this->assertEquals('https://volt-test.com/runs/run-abc-123', $run->getDashboardUrl());
     }
 
     public function testGetDashboardUrlWithDifferentIds(): void
     {
         $run = new CloudRun('abc-def-ghi', 'test-1', 'pending');
 
-        $this->assertEquals('https://app.volt-test.com/runs/abc-def-ghi', $run->getDashboardUrl());
+        $this->assertEquals('https://volt-test.com/runs/abc-def-ghi', $run->getDashboardUrl());
     }
 
     public function testIsSuccessfulWhenCompleted(): void

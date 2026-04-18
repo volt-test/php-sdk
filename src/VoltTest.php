@@ -263,6 +263,8 @@ class VoltTest
 
         $elapsed = 0;
         $interval = $this->pollInterval;
+        $currentStatus = 'pending';
+        $status = [];
         $spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
         $frame = 0;
         $lastStatus = '';
