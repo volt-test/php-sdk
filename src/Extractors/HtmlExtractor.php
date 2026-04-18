@@ -6,7 +6,6 @@ use VoltTest\Exceptions\VoltTestException;
 
 class HtmlExtractor implements Extractor
 {
-
     private string $variableName;
 
     private string $selector;

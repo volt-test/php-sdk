@@ -192,11 +192,11 @@ class Step
         return $this;
     }
 
-
     public function extractFromHtml(string $variableName, string $selector, ?string $attribute = null): self
     {
         $htmlExtractor = new HtmlExtractor($variableName, $selector, $attribute);
         $this->extracts[] = $htmlExtractor;
+
         return $this;
     }
 
