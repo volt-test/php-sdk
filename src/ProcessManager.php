@@ -9,6 +9,7 @@ class ProcessManager
     private string $binaryPath;
 
     private $currentProcess = null;
+
     private mixed $pipes;
 
     public function __construct(string $binaryPath)
@@ -43,7 +44,7 @@ class ProcessManager
             $this->currentProcess = null;
 
             // Print the final output
-            if (!empty($output)) {
+            if (! empty($output)) {
                 echo "\n$output\n";
             }
         }
@@ -157,6 +158,7 @@ class ProcessManager
                     if (feof($pipe)) {
                         fclose($pipe);
                         unset($pipes[$type]);
+
                         continue;
                     }
                 }

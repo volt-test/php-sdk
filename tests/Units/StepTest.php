@@ -128,7 +128,6 @@ class StepTest extends TestCase
         $this->assertEquals('html', $extract['type']);
     }
 
-
     public function testExtractFromHtmlWithAttribute(): void
     {
         $this->step->get(self::TEST_URL)
