@@ -9,7 +9,7 @@ use VoltTest\Exceptions\PlanLimitException;
 
 class CloudClient
 {
-    private const BASE_URL = 'http://localhost:8080/';
+    private const BASE_URL = 'https://cloud.volt-test.com';
 
     private const USER_AGENT = 'volt-test-php-sdk';
 
