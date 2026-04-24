@@ -52,6 +52,47 @@ class ProcessManager
         exit(0);
     }
 
+    public function executeCloud(array $config): string
+    {
+        [$success, $process, $pipes] = $this->openProcess();
+        $this->currentProcess = $process;
+        $this->pipes = $pipes;
+
+        if (! $success || ! is_array($pipes)) {
+            throw new RuntimeException('Failed to start process of volt test');
+        }
+
+        try {
+            $this->writeInput($pipes[0], json_encode($config, JSON_PRETTY_PRINT));
+            fclose($pipes[0]);
+
+            $output = $this->handleCloudProcess($pipes);
+
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+
+            if (is_resource($process)) {
+                $this->closeProcess($process);
+                $this->currentProcess = null;
+            }
+
+            return $output;
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if (is_resource($process)) {
+                $this->closeProcess($process);
+                $this->currentProcess = null;
+            }
+        }
+    }
+
     public function execute(array $config, bool $streamOutput): string
     {
         [$success, $process, $pipes] = $this->openProcess();
@@ -127,6 +168,50 @@ class ProcessManager
         }
 
         return [true, $process, $pipes];
+    }
+
+    private function handleCloudProcess(array $pipes): string
+    {
+        $output = '';
+
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        while (true) {
+            $read = array_filter($pipes, 'is_resource');
+            if (empty($read)) {
+                break;
+            }
+
+            $write = null;
+            $except = null;
+
+            if (stream_select($read, $write, $except, 1) === false) {
+                break;
+            }
+
+            foreach ($read as $pipe) {
+                $type = array_search($pipe, $pipes, true);
+                $data = fread($pipe, 4096);
+
+                if ($data === false || $data === '') {
+                    if (feof($pipe)) {
+                        fclose($pipe);
+                        unset($pipes[$type]);
+
+                        continue;
+                    }
+                }
+
+                if ($type === 1) {
+                    $output .= $data;
+                } elseif ($type === 2) {
+                    fwrite(STDERR, $data);
+                }
+            }
+        }
+
+        return $output;
     }
 
     private function handleProcess(array $pipes, bool $streamOutput): string

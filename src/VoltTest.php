@@ -2,8 +2,12 @@
 
 namespace VoltTest;
 
+use VoltTest\Exceptions\AuthenticationException;
+use VoltTest\Exceptions\CloudConnectionException;
+use VoltTest\Exceptions\CloudException;
 use VoltTest\Exceptions\CloudTimeoutException;
 use VoltTest\Exceptions\ErrorHandler;
+use VoltTest\Exceptions\PlanLimitException;
 use VoltTest\Exceptions\RunFailedException;
 use VoltTest\Exceptions\VoltTestException;
 
@@ -18,8 +22,6 @@ class VoltTest
     private ?string $cloudApiKey = null;
 
     private int $cloudTimeout = 1800;
-
-    protected int $pollInterval = 3;
 
     public function __construct(string $name, string $description = '')
     {
@@ -190,7 +192,9 @@ class VoltTest
         $config = $this->prepareConfig();
 
         if ($this->cloudApiKey !== null) {
-            return $this->runCloud($config);
+            $output = $this->processManager->executeCloud($config);
+
+            return $this->parseCloudResult($output);
         }
 
         $output = $this->processManager->execute($config, $streamOutput);
@@ -198,152 +202,48 @@ class VoltTest
         return new TestResult($output);
     }
 
-    protected function createCloudClient(): CloudClient
+    private function parseCloudResult(string $output): CloudRun
     {
-        return new CloudClient($this->cloudApiKey);
-    }
+        $data = json_decode($output, true);
 
-    private function runCloud(array $config): CloudRun
-    {
-        $client = $this->createCloudClient();
-
-        /** @var string|null $runId */
-        $runId = null;
-        if (function_exists('pcntl_async_signals')) {
-            pcntl_async_signals(true);
-            pcntl_signal(SIGINT, function () use ($client, &$runId) {
-                if ($runId !== null) {
-                    echo "\n  Stopping cloud run...\n";
-
-                    try {
-                        $client->stopRun($runId);
-                    } catch (\Exception $e) {
-                    }
-                }
-                exit(130);
-            });
+        if (! is_array($data)) {
+            throw new CloudException('Failed to parse cloud result: ' . $output);
         }
 
-        $targetUrl = $config['target']['url'] ?? '';
-        $virtualUsers = $config['virtual_users'] ?? 1;
-        $durationSeconds = 0;
-
-        if (isset($config['stages']) && is_array($config['stages'])) {
-            foreach ($config['stages'] as $stage) {
-                $durationSeconds += $this->parseDurationToSeconds($stage['duration'] ?? '0s');
-            }
-            $targets = array_column($config['stages'], 'target');
-            if (! empty($targets)) {
-                $virtualUsers = max($targets);
-            }
-        } elseif (isset($config['duration'])) {
-            $durationSeconds = $this->parseDurationToSeconds($config['duration']);
+        if (isset($data['error']) && $data['error'] === true) {
+            $this->throwCloudError($data['error_type'] ?? 'cloud_error', $data['message'] ?? 'Unknown error');
         }
 
-        $testConfig = $config;
-        unset($testConfig['weights']);
+        $status = $data['status'] ?? 'unknown';
+        $runId = $data['run_id'] ?? '';
+        $testId = $data['test_id'] ?? '';
+        $errorMessage = $data['error_message'] ?? '';
 
-        $testData = [
-            'name' => $config['name'] ?? 'Unnamed Test',
-            'description' => $config['description'] ?? '',
-            'target_url' => $targetUrl,
-            'virtual_users' => $virtualUsers,
-            'duration_seconds' => $durationSeconds,
-            'test_config' => json_encode($testConfig),
-        ];
-
-        $test = $client->createTest($testData);
-        $run = $client->startRun($test['id']);
-        $runId = $run['id'];
-
-        echo "\n";
-        echo "  Cloud test submitted (run: {$runId})\n";
-        echo "  Waiting for cloud infrastructure...\n";
-        echo "\n";
-
-        $elapsed = 0;
-        $interval = $this->pollInterval;
-        $currentStatus = 'pending';
-        $status = [];
-        $spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-        $frame = 0;
-        $lastStatus = '';
-
-        while ($elapsed < $this->cloudTimeout) {
-            sleep($interval);
-            $elapsed += $interval;
-
-            $status = $client->getRunStatus($runId);
-            $currentStatus = $status['status'];
-
-            if (in_array($currentStatus, ['completed', 'failed', 'stopped'])) {
-                echo "\r\033[K";
-
-                break;
+        if ($status === 'failed') {
+            $msg = 'Cloud run failed';
+            if ($errorMessage !== '') {
+                $msg .= ": {$errorMessage}";
             }
 
-            $spinner = $spinnerFrames[$frame % count($spinnerFrames)];
-            $frame++;
-
-            if (in_array($currentStatus, ['pending', 'provisioning', 'starting'])) {
-                $label = ucfirst($currentStatus) . '...';
-                echo "\r\033[K  {$spinner} {$label}";
-                $lastStatus = $currentStatus;
-            } elseif ($currentStatus === 'running' && isset($status['progress'])) {
-                $pct = $status['progress']['percentage'] ?? 0;
-                $elapsedSec = $status['progress']['elapsed_seconds'] ?? 0;
-                $totalSec = $status['progress']['total_seconds'] ?? $durationSeconds;
-
-                $barWidth = 20;
-                $filled = (int) round($barWidth * $pct / 100);
-                $bar = str_repeat('▓', $filled) . str_repeat('░', $barWidth - $filled);
-
-                echo "\r\033[K  {$bar} {$pct}% ({$elapsedSec}s / {$totalSec}s)";
-            }
+            throw new RunFailedException("{$msg}. Run ID: {$runId}");
         }
 
-        echo "\n";
-
-        if ($elapsed >= $this->cloudTimeout) {
-            throw new CloudTimeoutException(
-                "Cloud run timed out after {$this->cloudTimeout} seconds. Run ID: {$runId}"
-            );
-        }
-
-        $cloudRun = new CloudRun($runId, $test['id'], $currentStatus);
-
-        if ($currentStatus === 'failed') {
-            $errorMsg = $status['error_message'] ?? 'Unknown error';
-            echo "  ✗ Test failed: {$errorMsg}\n\n";
-            echo "  View details → {$cloudRun->getDashboardUrl()}\n\n";
-
-            throw new RunFailedException("Cloud run failed: {$errorMsg}. Run ID: {$runId}");
-        }
-
-        if ($currentStatus === 'stopped') {
-            echo "  ⊘ Test was stopped\n\n";
-            echo "  View details → {$cloudRun->getDashboardUrl()}\n\n";
-
+        if ($status === 'stopped') {
             throw new RunFailedException("Cloud run was stopped. Run ID: {$runId}");
         }
 
-        echo "  ✓ Test completed\n\n";
-        echo "  View results → {$cloudRun->getDashboardUrl()}\n\n";
-
-        return $cloudRun;
+        return new CloudRun($runId, $testId, $status);
     }
 
-    private function parseDurationToSeconds(string $duration): int
+    private function throwCloudError(string $errorType, string $message): void
     {
-        if (preg_match('/^(\d+)(s|m|h)$/', $duration, $matches)) {
-            return match ($matches[2]) {
-                's' => (int) $matches[1],
-                'm' => (int) $matches[1] * 60,
-                'h' => (int) $matches[1] * 3600,
-            };
-        }
-
-        return 0;
+        match ($errorType) {
+            'authentication' => throw new AuthenticationException($message),
+            'plan_limit' => throw new PlanLimitException($message),
+            'connection' => throw new CloudConnectionException($message),
+            'timeout' => throw new CloudTimeoutException($message),
+            default => throw new CloudException($message),
+        };
     }
 
     private function prepareConfig(): array
@@ -356,6 +256,12 @@ class VoltTest
         $config['weights'] = array_map(function (Scenario $scenario) {
             return $scenario->getWeight();
         }, $this->scenarios);
+
+        if ($this->cloudApiKey !== null) {
+            $config['cloud'] = true;
+            $config['api_key'] = $this->cloudApiKey;
+            $config['cloud_timeout'] = $this->cloudTimeout;
+        }
 
         return $config;
     }

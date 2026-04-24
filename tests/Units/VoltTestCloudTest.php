@@ -3,35 +3,18 @@
 namespace Tests\Units;
 
 use PHPUnit\Framework\TestCase;
-use VoltTest\CloudClient;
 use VoltTest\CloudRun;
+use VoltTest\Exceptions\AuthenticationException;
+use VoltTest\Exceptions\CloudConnectionException;
+use VoltTest\Exceptions\CloudException;
 use VoltTest\Exceptions\CloudTimeoutException;
 use VoltTest\Exceptions\ErrorHandler;
+use VoltTest\Exceptions\PlanLimitException;
 use VoltTest\Exceptions\RunFailedException;
 use VoltTest\Exceptions\VoltTestException;
 use VoltTest\ProcessManager;
 use VoltTest\TestResult;
 use VoltTest\VoltTest;
-
-class TestableVoltTest extends VoltTest
-{
-    public ?CloudClient $mockClient = null;
-
-    public int $pollInterval = 0;
-
-    public function setTestCloudTimeout(int $seconds): void
-    {
-        $reflection = new \ReflectionClass(VoltTest::class);
-        $property = $reflection->getProperty('cloudTimeout');
-        $property->setAccessible(true);
-        $property->setValue($this, $seconds);
-    }
-
-    protected function createCloudClient(): CloudClient
-    {
-        return $this->mockClient;
-    }
-}
 
 class VoltTestCloudTest extends TestCase
 {
@@ -111,62 +94,6 @@ class VoltTestCloudTest extends TestCase
         $this->assertEquals(1800, $this->getPrivateProperty($this->voltTest, 'cloudTimeout'));
     }
 
-    public function testParseDurationSeconds(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(30, $method->invoke($this->voltTest, '30s'));
-    }
-
-    public function testParseDurationMinutes(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(300, $method->invoke($this->voltTest, '5m'));
-    }
-
-    public function testParseDurationHours(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(3600, $method->invoke($this->voltTest, '1h'));
-    }
-
-    public function testParseDurationInvalid(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(0, $method->invoke($this->voltTest, 'invalid'));
-    }
-
-    public function testParseDurationEmpty(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(0, $method->invoke($this->voltTest, ''));
-    }
-
-    public function testParseDurationMissingUnit(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(0, $method->invoke($this->voltTest, '10'));
-    }
-
-    public function testParseDurationZero(): void
-    {
-        $method = new \ReflectionMethod(VoltTest::class, 'parseDurationToSeconds');
-        $method->setAccessible(true);
-
-        $this->assertEquals(0, $method->invoke($this->voltTest, '0s'));
-    }
-
     public function testRunRoutesToLocalWhenNoCloudKey(): void
     {
         $mockProcessManager = $this->createMock(ProcessManager::class);
@@ -191,223 +118,247 @@ class VoltTestCloudTest extends TestCase
         $this->assertInstanceOf(TestResult::class, $result);
     }
 
-    public function testRunRoutesToCloudWhenKeySet(): void
+    public function testRunCloudAddsCloudFieldsToConfig(): void
     {
-        $testable = new TestableVoltTest('Cloud Route Test');
-        $testable->setCloudTimeout(60);
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $capturedConfig = null;
+        $mockProcessManager->expects($this->once())
+            ->method('executeCloud')
+            ->willReturnCallback(function (array $config) use (&$capturedConfig) {
+                $capturedConfig = $config;
 
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->expects($this->once())
-            ->method('createTest')
-            ->willReturn(['id' => 'test-1']);
-        $mockClient->expects($this->once())
-            ->method('startRun')
-            ->with('test-1')
-            ->willReturn(['id' => 'run-1']);
-        $mockClient->expects($this->once())
-            ->method('getRunStatus')
-            ->with('run-1')
-            ->willReturn(['status' => 'completed']);
+                return json_encode(['run_id' => 'run-1', 'test_id' => 'test-1', 'status' => 'completed']);
+            });
 
-        $testable->mockClient = $mockClient;
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
 
-        $testable->cloud('vt_test_key_123')
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setCloudTimeout(120)
             ->setVirtualUsers(1)
             ->setDuration('1s');
 
-        $testable->scenario('Test')
+        $this->voltTest->scenario('Test')
             ->step('Step')
             ->get('http://example.com')
             ->validateStatus('success', 200);
 
-        ob_start();
-        $result = $testable->run(false);
-        ob_end_clean();
+        $this->voltTest->run(false);
 
-        $this->assertInstanceOf(CloudRun::class, $result);
+        $this->assertTrue($capturedConfig['cloud']);
+        $this->assertEquals('vt_test_key_123', $capturedConfig['api_key']);
+        $this->assertEquals(120, $capturedConfig['cloud_timeout']);
     }
 
-    public function testRunCloudCompletedSuccessfully(): void
+    public function testRunCloudParsesSuccessJson(): void
     {
-        $testable = $this->createTestableVoltTest();
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['run_id' => 'run-abc', 'test_id' => 'test-456', 'status' => 'completed']));
 
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->method('createTest')->willReturn(['id' => 'test-1']);
-        $mockClient->method('startRun')->willReturn(['id' => 'run-1']);
-        $mockClient->method('getRunStatus')->willReturn(['status' => 'completed']);
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
 
-        $testable->mockClient = $mockClient;
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
 
-        ob_start();
-        $result = $testable->run(false);
-        ob_end_clean();
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $result = $this->voltTest->run(false);
 
         $this->assertInstanceOf(CloudRun::class, $result);
-        $this->assertTrue($result->isSuccessful());
-        $this->assertEquals('run-1', $result->getRunId());
-        $this->assertEquals('test-1', $result->getTestId());
+        $this->assertEquals('run-abc', $result->getRunId());
+        $this->assertEquals('test-456', $result->getTestId());
         $this->assertEquals('completed', $result->getStatus());
+        $this->assertTrue($result->isSuccessful());
     }
 
-    public function testRunCloudOutputContainsDashboardUrl(): void
+    public function testRunCloudParsesFailedStatus(): void
     {
-        $testable = $this->createTestableVoltTest();
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['run_id' => 'run-1', 'test_id' => 'test-1', 'status' => 'failed']));
 
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->method('createTest')->willReturn(['id' => 'test-1']);
-        $mockClient->method('startRun')->willReturn(['id' => 'run-abc']);
-        $mockClient->method('getRunStatus')->willReturn(['status' => 'completed']);
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
 
-        $testable->mockClient = $mockClient;
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
 
-        ob_start();
-        $testable->run(false);
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('https://volt-test.com/runs/run-abc', $output);
-        $this->assertStringContainsString('Test completed', $output);
-    }
-
-    public function testRunCloudFailedThrowsRunFailedException(): void
-    {
-        $testable = $this->createTestableVoltTest();
-
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->method('createTest')->willReturn(['id' => 'test-1']);
-        $mockClient->method('startRun')->willReturn(['id' => 'run-1']);
-        $mockClient->method('getRunStatus')->willReturn([
-            'status' => 'failed',
-            'error_message' => 'Out of memory',
-        ]);
-
-        $testable->mockClient = $mockClient;
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
 
         $this->expectException(RunFailedException::class);
-        $this->expectExceptionMessage('Cloud run failed: Out of memory');
+        $this->expectExceptionMessage('Cloud run failed');
 
-        ob_start();
-
-        try {
-            $testable->run(false);
-        } finally {
-            ob_end_clean();
-        }
+        $this->voltTest->run(false);
     }
 
-    public function testRunCloudStoppedThrowsRunFailedException(): void
+    public function testRunCloudParsesFailedStatusWithErrorMessage(): void
     {
-        $testable = $this->createTestableVoltTest();
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode([
+                'run_id' => 'run-1',
+                'test_id' => 'test-1',
+                'status' => 'failed',
+                'error_message' => 'Target unreachable',
+            ]));
 
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->method('createTest')->willReturn(['id' => 'test-1']);
-        $mockClient->method('startRun')->willReturn(['id' => 'run-1']);
-        $mockClient->method('getRunStatus')->willReturn(['status' => 'stopped']);
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
 
-        $testable->mockClient = $mockClient;
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $this->expectException(RunFailedException::class);
+        $this->expectExceptionMessage('Cloud run failed: Target unreachable');
+
+        $this->voltTest->run(false);
+    }
+
+    public function testRunCloudParsesStoppedStatus(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['run_id' => 'run-1', 'test_id' => 'test-1', 'status' => 'stopped']));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
 
         $this->expectException(RunFailedException::class);
         $this->expectExceptionMessage('Cloud run was stopped');
 
-        ob_start();
-
-        try {
-            $testable->run(false);
-        } finally {
-            ob_end_clean();
-        }
+        $this->voltTest->run(false);
     }
 
-    public function testRunCloudTimeoutThrowsCloudTimeoutException(): void
+    public function testRunCloudAuthenticationError(): void
     {
-        $testable = new TestableVoltTest('Timeout Test');
-        $testable->pollInterval = 1;
-        $testable->setTestCloudTimeout(2);
-        $testable->cloud('vt_test_key_123')
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['error' => true, 'error_type' => 'authentication', 'message' => 'Invalid API key']));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
             ->setVirtualUsers(1)
             ->setDuration('1s');
 
-        $testable->scenario('Test')
+        $this->voltTest->scenario('Test')
             ->step('Step')
             ->get('http://example.com')
             ->validateStatus('success', 200);
 
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->method('createTest')->willReturn(['id' => 'test-1']);
-        $mockClient->method('startRun')->willReturn(['id' => 'run-1']);
-        $mockClient->method('getRunStatus')->willReturn([
-            'status' => 'running',
-            'progress' => ['percentage' => 50, 'elapsed_seconds' => 15, 'total_seconds' => 30],
-        ]);
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid API key');
 
-        $testable->mockClient = $mockClient;
+        $this->voltTest->run(false);
+    }
+
+    public function testRunCloudPlanLimitError(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['error' => true, 'error_type' => 'plan_limit', 'message' => 'Plan limit exceeded']));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $this->expectException(PlanLimitException::class);
+
+        $this->voltTest->run(false);
+    }
+
+    public function testRunCloudConnectionError(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['error' => true, 'error_type' => 'connection', 'message' => 'Connection failed']));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $this->expectException(CloudConnectionException::class);
+
+        $this->voltTest->run(false);
+    }
+
+    public function testRunCloudTimeoutError(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn(json_encode(['error' => true, 'error_type' => 'timeout', 'message' => 'Cloud run timed out']));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
 
         $this->expectException(CloudTimeoutException::class);
-        $this->expectExceptionMessage('Cloud run timed out');
 
-        ob_start();
-
-        try {
-            $testable->run(false);
-        } finally {
-            ob_end_clean();
-        }
+        $this->voltTest->run(false);
     }
 
-    public function testRunCloudBuildsCorrectTestData(): void
+    public function testRunCloudMalformedOutput(): void
     {
-        $testable = new TestableVoltTest('My Load Test', 'Testing the app');
-        $testable->pollInterval = 0;
-        $testable->setCloudTimeout(60);
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->method('executeCloud')
+            ->willReturn('not json');
 
-        $testable->cloud('vt_test_key_123')
-            ->setVirtualUsers(50)
-            ->setDuration('5m');
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
 
-        $testable->scenario('Homepage')
-            ->step('Load page')
-            ->get('http://example.com')
-            ->validateStatus('success', 200);
-
-        $capturedData = null;
-        $mockClient = $this->createMock(CloudClient::class);
-        $mockClient->expects($this->once())
-            ->method('createTest')
-            ->willReturnCallback(function (array $data) use (&$capturedData) {
-                $capturedData = $data;
-
-                return ['id' => 'test-1'];
-            });
-        $mockClient->method('startRun')->willReturn(['id' => 'run-1']);
-        $mockClient->method('getRunStatus')->willReturn(['status' => 'completed']);
-
-        $testable->mockClient = $mockClient;
-
-        ob_start();
-        $testable->run(false);
-        ob_end_clean();
-
-        $this->assertEquals('My Load Test', $capturedData['name']);
-        $this->assertEquals('Testing the app', $capturedData['description']);
-        $this->assertEquals(50, $capturedData['virtual_users']);
-        $this->assertEquals(300, $capturedData['duration_seconds']);
-        $this->assertArrayHasKey('test_config', $capturedData);
-        $this->assertIsString($capturedData['test_config']);
-    }
-
-    private function createTestableVoltTest(): TestableVoltTest
-    {
-        $testable = new TestableVoltTest('Cloud Test');
-        $testable->setCloudTimeout(60);
-        $testable->cloud('vt_test_key_123')
+        $this->voltTest->cloud('vt_test_key_123')
             ->setVirtualUsers(1)
             ->setDuration('1s');
 
-        $testable->scenario('Test')
+        $this->voltTest->scenario('Test')
             ->step('Step')
             ->get('http://example.com')
             ->validateStatus('success', 200);
 
-        return $testable;
+        $this->expectException(CloudException::class);
+        $this->expectExceptionMessage('Failed to parse cloud result');
+
+        $this->voltTest->run(false);
     }
 
     private function getSampleOutput(): string
