@@ -23,6 +23,9 @@ class VoltTest
 
     private int $cloudTimeout = 1800;
 
+    /** @var callable|null */
+    private $onConflictPrompt = null;
+
     public function __construct(string $name, string $description = '')
     {
         ErrorHandler::register();
@@ -179,6 +182,13 @@ class VoltTest
         return $this;
     }
 
+    public function setOnConflictPrompt(callable $callback): self
+    {
+        $this->onConflictPrompt = $callback;
+
+        return $this;
+    }
+
     public function scenario(string $name, string $description = ''): Scenario
     {
         $scenario = new Scenario($name, $description);
@@ -187,12 +197,30 @@ class VoltTest
         return $scenario;
     }
 
-    public function run(bool $streamOutput = false): TestResult|CloudRun
+    public function run(bool $streamOutput = false): TestResult|CloudRun|null
     {
         $config = $this->prepareConfig();
 
         if ($this->cloudApiKey !== null) {
             $output = $this->processManager->executeCloud($config);
+
+            $data = json_decode($output, true);
+            if (is_array($data) && isset($data['conflict']) && $data['conflict'] === true) {
+                $existingTests = $data['existing_tests'] ?? [];
+                $decision = $this->promptForConflict($existingTests);
+
+                if ($decision === 'cancel') {
+                    return null;
+                }
+
+                if ($decision !== null) {
+                    $config['existing_test_id'] = $decision;
+                } else {
+                    $config['skip_lookup'] = true;
+                }
+
+                $output = $this->processManager->executeCloud($config);
+            }
 
             return $this->parseCloudResult($output);
         }
@@ -200,6 +228,66 @@ class VoltTest
         $output = $this->processManager->execute($config, $streamOutput);
 
         return new TestResult($output);
+    }
+
+    /**
+     * @param array[] $existingTests
+     * @return string|null Test ID to update, or null to create new
+     */
+    private function promptForConflict(array $existingTests): ?string
+    {
+        if (empty($existingTests)) {
+            return null;
+        }
+
+        if ($this->onConflictPrompt !== null) {
+            return ($this->onConflictPrompt)($existingTests);
+        }
+
+        if (function_exists('posix_isatty') && posix_isatty(STDIN)) {
+            $count = count($existingTests);
+            $name = $existingTests[0]['name'] ?? 'Unknown';
+            echo "\n{$count} test(s) named '{$name}' already exist:\n";
+
+            foreach ($existingTests as $i => $test) {
+                $num = $i + 1;
+                $id = substr($test['id'] ?? '', 0, 8);
+                $url = $test['target_url'] ?? 'N/A';
+                $vus = $test['virtual_users'] ?? '?';
+                $updated = $test['updated_at'] ?? '';
+                echo "  [{$num}] ID: {$id}...  Target: {$url}  VUs: {$vus}  Updated: {$updated}\n";
+            }
+
+            $createOption = $count + 1;
+            $cancelOption = $count + 2;
+            echo "  [{$createOption}] Create new test\n";
+            echo "  [{$cancelOption}] Cancel\n";
+
+            while (true) {
+                echo "Choice [1]: ";
+                $input = trim((string) fgets(STDIN));
+
+                if ($input === '') {
+                    return $existingTests[0]['id'] ?? null;
+                }
+
+                $choice = (int) $input;
+                if ($choice >= 1 && $choice <= $count) {
+                    return $existingTests[$choice - 1]['id'] ?? null;
+                }
+                if ($choice === $createOption) {
+                    return null;
+                }
+                if ($choice === $cancelOption) {
+                    return 'cancel';
+                }
+
+                echo "  Invalid choice. Please enter a number between 1 and {$cancelOption}.\n";
+            }
+        }
+
+        // Non-interactive: default to updating the most recent
+        return $existingTests[0]['id'] ?? null;
     }
 
     private function parseCloudResult(string $output): CloudRun

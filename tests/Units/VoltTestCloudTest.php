@@ -361,6 +361,209 @@ class VoltTestCloudTest extends TestCase
         $this->voltTest->run(false);
     }
 
+    public function testRunCloudConflictUpdateReInvokesWithExistingTestId(): void
+    {
+        $callCount = 0;
+        $capturedConfigs = [];
+
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->expects($this->exactly(2))
+            ->method('executeCloud')
+            ->willReturnCallback(function (array $config) use (&$callCount, &$capturedConfigs) {
+                $capturedConfigs[] = $config;
+                $callCount++;
+
+                if ($callCount === 1) {
+                    return json_encode([
+                        'conflict' => true,
+                        'existing_tests' => [
+                            ['id' => 'test-aaa', 'name' => 'Cloud Test Suite', 'target_url' => 'https://example.com', 'virtual_users' => 100, 'updated_at' => '2026-05-08'],
+                            ['id' => 'test-bbb', 'name' => 'Cloud Test Suite', 'target_url' => 'https://other.com', 'virtual_users' => 50, 'updated_at' => '2026-05-07'],
+                        ],
+                    ]);
+                }
+
+                return json_encode(['run_id' => 'run-1', 'test_id' => 'test-aaa', 'status' => 'completed']);
+            });
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        // Callback returns the ID of the first test (update it)
+        $this->voltTest->setOnConflictPrompt(function (array $existingTests) {
+            return $existingTests[0]['id'];
+        });
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $result = $this->voltTest->run(false);
+
+        $this->assertInstanceOf(\VoltTest\CloudRun::class, $result);
+        $this->assertArrayNotHasKey('existing_test_id', $capturedConfigs[0]);
+        $this->assertEquals('test-aaa', $capturedConfigs[1]['existing_test_id']);
+    }
+
+    public function testRunCloudConflictCreateReInvokesWithSkipLookup(): void
+    {
+        $callCount = 0;
+        $capturedConfigs = [];
+
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->expects($this->exactly(2))
+            ->method('executeCloud')
+            ->willReturnCallback(function (array $config) use (&$callCount, &$capturedConfigs) {
+                $capturedConfigs[] = $config;
+                $callCount++;
+
+                if ($callCount === 1) {
+                    return json_encode([
+                        'conflict' => true,
+                        'existing_tests' => [
+                            ['id' => 'test-aaa', 'name' => 'Cloud Test Suite'],
+                        ],
+                    ]);
+                }
+
+                return json_encode(['run_id' => 'run-2', 'test_id' => 'new-test-id', 'status' => 'completed']);
+            });
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        // Callback returns null = create new
+        $this->voltTest->setOnConflictPrompt(function (array $existingTests) {
+            return null;
+        });
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $result = $this->voltTest->run(false);
+
+        $this->assertInstanceOf(\VoltTest\CloudRun::class, $result);
+        $this->assertArrayNotHasKey('existing_test_id', $capturedConfigs[1]);
+        $this->assertTrue($capturedConfigs[1]['skip_lookup']);
+    }
+
+    public function testRunCloudSkipsLookupWhenNotCloud(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->expects($this->once())
+            ->method('execute')
+            ->willReturn($this->getSampleOutput());
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest
+            ->setVirtualUsers(1)
+            ->setDuration('1s')
+            ->setTarget('40s');
+
+        $this->voltTest->scenario('Simple Test')
+            ->step('Homepage')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $result = $this->voltTest->run(false);
+
+        $this->assertInstanceOf(\VoltTest\TestResult::class, $result);
+    }
+
+    public function testSetOnConflictPromptReturnsSelf(): void
+    {
+        $result = $this->voltTest->setOnConflictPrompt(function (array $test) {
+            return 'update';
+        });
+
+        $this->assertSame($this->voltTest, $result);
+    }
+
+    public function testOnConflictPromptCallbackIsStored(): void
+    {
+        $callback = function (array $test) {
+            return 'create';
+        };
+        $this->voltTest->setOnConflictPrompt($callback);
+
+        $this->assertSame($callback, $this->getPrivateProperty($this->voltTest, 'onConflictPrompt'));
+    }
+
+    public function testRunCloudConflictCancelReturnsNull(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->expects($this->once())
+            ->method('executeCloud')
+            ->willReturn(json_encode([
+                'conflict' => true,
+                'existing_tests' => [
+                    ['id' => 'test-aaa', 'name' => 'Cloud Test Suite'],
+                ],
+            ]));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->setOnConflictPrompt(function (array $existingTests) {
+            return 'cancel';
+        });
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $result = $this->voltTest->run(false);
+
+        $this->assertNull($result);
+    }
+
+    public function testRunCloudConflictCancelDoesNotInvokeEngineAgain(): void
+    {
+        $mockProcessManager = $this->createMock(ProcessManager::class);
+        $mockProcessManager->expects($this->once())
+            ->method('executeCloud')
+            ->willReturn(json_encode([
+                'conflict' => true,
+                'existing_tests' => [
+                    ['id' => 'test-aaa', 'name' => 'Cloud Test Suite'],
+                    ['id' => 'test-bbb', 'name' => 'Cloud Test Suite'],
+                ],
+            ]));
+
+        $this->setPrivateProperty($this->voltTest, 'processManager', $mockProcessManager);
+
+        $this->voltTest->cloud('vt_test_key_123')
+            ->setVirtualUsers(1)
+            ->setDuration('1s');
+
+        $this->voltTest->setOnConflictPrompt(function (array $existingTests) {
+            return 'cancel';
+        });
+
+        $this->voltTest->scenario('Test')
+            ->step('Step')
+            ->get('http://example.com')
+            ->validateStatus('success', 200);
+
+        $result = $this->voltTest->run(false);
+
+        $this->assertNull($result);
+    }
+
     private function getSampleOutput(): string
     {
         return <<<'EOT'
