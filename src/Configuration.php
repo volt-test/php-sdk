@@ -157,7 +157,7 @@ class Configuration
     }
 
     /**
-     * @param array<string, int> $regions Region code => weight (e.g., ['us-east-1' => 60, 'eu-west-1' => 40])
+     * @param array $regions Region code => weight (e.g., ['us-east-1' => 60, 'eu-west-1' => 40])
      *
      * @throws VoltTestException
      */
