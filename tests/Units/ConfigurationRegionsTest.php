@@ -138,7 +138,6 @@ class ConfigurationRegionsTest extends TestCase
     {
         $this->expectException(VoltTestException::class);
         $this->expectExceptionMessage('Region weight must be an integer');
-        /** @phpstan-ignore argument.type */
         $this->config->setRegions(['us-east-1' => 60.5, 'eu-west-1' => 39.5]);
     }
 }
