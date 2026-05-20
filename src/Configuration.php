@@ -25,6 +25,9 @@ class Configuration
     /** @var Stage[] */
     private array $stages = [];
 
+    /** @var array<string, int> */
+    private array $regionConfig = [];
+
     public function __construct(string $name, string $description = '')
     {
         $this->name = $name;
@@ -63,6 +66,14 @@ class Configuration
 
         if (trim($this->httpTimeout) !== '') {
             $array['http_timeout'] = $this->httpTimeout;
+        }
+
+        if (count($this->regionConfig) > 0) {
+            $array['region_config'] = array_map(
+                fn (string $region, int $weight) => ['region' => $region, 'weight' => $weight],
+                array_keys($this->regionConfig),
+                array_values($this->regionConfig)
+            );
         }
 
         return $array;
@@ -143,5 +154,45 @@ class Configuration
     public function hasConstantLoad(): bool
     {
         return $this->virtualUsers > 1 || trim($this->duration) !== '' || trim($this->rampUp) !== '';
+    }
+
+    /**
+     * @param array<string, int> $regions Region code => weight (e.g., ['us-east-1' => 60, 'eu-west-1' => 40])
+     *
+     * @throws VoltTestException
+     */
+    public function setRegions(array $regions): self
+    {
+        if (empty($regions)) {
+            throw new VoltTestException('Region distribution cannot be empty');
+        }
+
+        foreach ($regions as $region => $weight) {
+            if (! is_string($region) || trim($region) === '') {
+                throw new VoltTestException('Region code must be a non-empty string');
+            }
+
+            if (! is_int($weight)) {
+                throw new VoltTestException('Region weight must be an integer');
+            }
+
+            if ($weight <= 0) {
+                throw new VoltTestException('Region weight must be greater than 0');
+            }
+        }
+
+        $sum = array_sum($regions);
+        if ($sum !== 100) {
+            throw new VoltTestException("Region weights must sum to 100, got {$sum}");
+        }
+
+        $this->regionConfig = $regions;
+
+        return $this;
+    }
+
+    public function hasRegions(): bool
+    {
+        return count($this->regionConfig) > 0;
     }
 }

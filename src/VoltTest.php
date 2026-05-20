@@ -134,6 +134,20 @@ class VoltTest
     }
 
     /**
+     * Set region distribution for cloud execution.
+     *
+     * @param array<string, int> $regions Region code => weight (e.g., ['us-east-1' => 60, 'eu-west-1' => 40])
+     * @return $this
+     * @throws VoltTestException
+     */
+    public function regions(array $regions): self
+    {
+        $this->config->setRegions($regions);
+
+        return $this;
+    }
+
+    /**
      * Set the target URL and idle timeout
      * @param string $idleTimeout Default is 30s (30 seconds) example: 1s (1 second), 1m (1 minute), 1h (1 hour)
      * @throws VoltTestException
@@ -199,6 +213,10 @@ class VoltTest
 
     public function run(bool $streamOutput = false): TestResult|CloudRun|null
     {
+        if ($this->config->hasRegions() && $this->cloudApiKey === null) {
+            throw new VoltTestException('Region distribution requires cloud execution mode. Call cloud() before run().');
+        }
+
         $config = $this->prepareConfig();
 
         if ($this->cloudApiKey !== null) {
