@@ -195,4 +195,18 @@ class Configuration
     {
         return count($this->regionConfig) > 0;
     }
+
+    public function setName(string $name): self
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+    public function setDescription(string $description): self
+    {
+        $this->description = $description;
+
+        return $this;
+    }
 }

@@ -147,6 +147,20 @@ class VoltTest
         return $this;
     }
 
+    public function setName(string $name): self
+    {
+        $this->config->setName($name);
+
+        return $this;
+    }
+
+    public function setDescription(string $description): self
+    {
+        $this->config->setDescription($description);
+
+        return $this;
+    }
+
     /**
      * Set the target URL and idle timeout
      * @param string $idleTimeout Default is 30s (30 seconds) example: 1s (1 second), 1m (1 minute), 1h (1 hour)

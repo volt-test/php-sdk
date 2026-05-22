@@ -41,12 +41,11 @@ class VoltTestTest extends TestCase
 
         $result = $voltTest->run(true);
 
-        // Verify response time metrics
+        $this->assertNotNull($result);
+
         $avgResponseTime = $result->getAvgResponseTime();
-        var_dump($avgResponseTime);
         if ($avgResponseTime !== null) {
             $this->assertStringContainsString('ms', $avgResponseTime, "Average response time should contain 'ms'");
         }
-
     }
 }

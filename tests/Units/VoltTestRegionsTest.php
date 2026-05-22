@@ -3,6 +3,7 @@
 namespace Tests\Units;
 
 use PHPUnit\Framework\TestCase;
+use VoltTest\Exceptions\ErrorHandler;
 use VoltTest\Exceptions\VoltTestException;
 use VoltTest\VoltTest;
 
@@ -13,6 +14,12 @@ class VoltTestRegionsTest extends TestCase
     public function setUp(): void
     {
         $this->test = new VoltTest('Region Test', 'Testing region distribution');
+    }
+
+    protected function tearDown(): void
+    {
+        ErrorHandler::unregister();
+        parent::tearDown();
     }
 
     public function testRegionsReturnsSelf(): void
