@@ -102,12 +102,17 @@ class VoltTest
      */
     public function stage(string $duration, int $target): self
     {
-        if ($this->config->hasConstantLoad()) {
-            throw new VoltTestException('Cannot use stages with setVirtualUsers/setDuration/setRampUp. Use stages to define the full load profile.');
+        if ($this->config->hasConstantLoad() && ! $this->config->hasStages()) {
+            $this->config->clearConstantLoad();
         }
         $this->config->addStage($duration, $target);
 
         return $this;
+    }
+
+    public function hasStages(): bool
+    {
+        return $this->config->hasStages();
     }
 
     /**

@@ -79,36 +79,36 @@ class VoltTestStagesTest extends TestCase
         $this->voltTest->stage('5m', -1);
     }
 
-    // --- Mutual exclusivity: stages after constant load ---
+    // --- Stages auto-clear constant load when adding first stage ---
 
-    public function testStageThrowsAfterSetVirtualUsers(): void
+    public function testStageClearsConstantLoadAfterSetVirtualUsers(): void
     {
         $this->voltTest->setVirtualUsers(10);
 
-        $this->expectException(VoltTestException::class);
-        $this->expectExceptionMessage('Cannot use stages with setVirtualUsers/setDuration/setRampUp');
+        $result = $this->voltTest->stage('5m', 100);
 
-        $this->voltTest->stage('5m', 100);
+        $this->assertSame($this->voltTest, $result);
+        $this->assertTrue($this->voltTest->hasStages());
     }
 
-    public function testStageThrowsAfterSetDuration(): void
+    public function testStageClearsConstantLoadAfterSetDuration(): void
     {
         $this->voltTest->setDuration('5m');
 
-        $this->expectException(VoltTestException::class);
-        $this->expectExceptionMessage('Cannot use stages with setVirtualUsers/setDuration/setRampUp');
+        $result = $this->voltTest->stage('5m', 100);
 
-        $this->voltTest->stage('5m', 100);
+        $this->assertSame($this->voltTest, $result);
+        $this->assertTrue($this->voltTest->hasStages());
     }
 
-    public function testStageThrowsAfterSetRampUp(): void
+    public function testStageClearsConstantLoadAfterSetRampUp(): void
     {
         $this->voltTest->setRampUp('10s');
 
-        $this->expectException(VoltTestException::class);
-        $this->expectExceptionMessage('Cannot use stages with setVirtualUsers/setDuration/setRampUp');
+        $result = $this->voltTest->stage('5m', 100);
 
-        $this->voltTest->stage('5m', 100);
+        $this->assertSame($this->voltTest, $result);
+        $this->assertTrue($this->voltTest->hasStages());
     }
 
     // --- Mutual exclusivity: constant load after stages ---

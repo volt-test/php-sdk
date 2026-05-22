@@ -156,6 +156,15 @@ class Configuration
         return $this->virtualUsers > 1 || trim($this->duration) !== '' || trim($this->rampUp) !== '';
     }
 
+    public function clearConstantLoad(): self
+    {
+        $this->virtualUsers = 1;
+        $this->duration = '';
+        $this->rampUp = '';
+
+        return $this;
+    }
+
     /**
      * @param array $regions Region code => weight (e.g., ['us-east-1' => 60, 'eu-west-1' => 40])
      *
