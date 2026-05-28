@@ -107,14 +107,7 @@ class ProcessManager
             $this->writeInput($pipes[0], json_encode($config, JSON_PRETTY_PRINT));
             fclose($pipes[0]);
 
-            $output = $this->handleProcess($pipes, $streamOutput);
-
-            // Store stderr content before closing
-            $stderrContent = '';
-            if (isset($pipes[2]) && is_resource($pipes[2])) {
-                rewind($pipes[2]);
-                $stderrContent = stream_get_contents($pipes[2]);
-            }
+            [$output, $stderrContent] = $this->handleProcess($pipes, $streamOutput);
 
             // Clean up pipes
             foreach ($pipes as $pipe) {
@@ -212,9 +205,10 @@ class ProcessManager
         return $output;
     }
 
-    private function handleProcess(array $pipes, bool $streamOutput): string
+    private function handleProcess(array $pipes, bool $streamOutput): array
     {
         $output = '';
+        $stderr = '';
 
         // Set non-blocking mode for stdout and stderr
         stream_set_blocking($pipes[1], false);
@@ -251,13 +245,16 @@ class ProcessManager
                     if ($streamOutput) {
                         echo $data;
                     }
-                } elseif ($type === 2 && $streamOutput) { // stderr
-                    fwrite(STDERR, $data);
+                } elseif ($type === 2) { // stderr
+                    $stderr .= $data;
+                    if ($streamOutput) {
+                        fwrite(STDERR, $data);
+                    }
                 }
             }
         }
 
-        return $output;
+        return [$output, $stderr];
     }
 
     protected function writeInput($pipe, string $input): void
