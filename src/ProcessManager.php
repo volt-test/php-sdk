@@ -126,10 +126,8 @@ class ProcessManager
             if (is_resource($process)) {
                 $exitCode = $this->closeProcess($process);
                 $this->currentProcess = null;
-                if ($exitCode !== 0) {
+                if ($exitCode !== 0 && ! empty(trim($stderrContent))) {
                     echo "\nError: " . trim($stderrContent) . "\n";
-
-                    return '';
                 }
             }
 
