@@ -65,6 +65,54 @@ class VoltTestTest extends TestCase
         $this->voltTest->setTarget('invalid-url');
     }
 
+    public function testTargetSetsUrlAndIdleTimeout(): void
+    {
+        $result = $this->voltTest->target('https://api.example.com', '10s');
+
+        $this->assertInstanceOf(VoltTest::class, $result);
+        $config = $this->getPrivateProperty($this->voltTest, 'config')->toArray();
+        $this->assertEquals('https://api.example.com', $config['target']['url']);
+        $this->assertEquals('10s', $config['target']['idle_timeout']);
+    }
+
+    public function testTargetWithDefaultIdleTimeout(): void
+    {
+        $this->voltTest->target('https://api.example.com');
+
+        $config = $this->getPrivateProperty($this->voltTest, 'config')->toArray();
+        $this->assertEquals('https://api.example.com', $config['target']['url']);
+        $this->assertEquals('30s', $config['target']['idle_timeout']);
+    }
+
+    public function testTargetWithInvalidUrl(): void
+    {
+        $this->expectException(VoltTestException::class);
+        $this->voltTest->target('not-a-url');
+    }
+
+    public function testSetIdleTimeout(): void
+    {
+        $result = $this->voltTest->setIdleTimeout('15s');
+
+        $this->assertInstanceOf(VoltTest::class, $result);
+        $config = $this->getPrivateProperty($this->voltTest, 'config')->toArray();
+        $this->assertEquals('15s', $config['target']['idle_timeout']);
+    }
+
+    public function testSetIdleTimeoutInvalid(): void
+    {
+        $this->expectException(VoltTestException::class);
+        $this->voltTest->setIdleTimeout('invalid');
+    }
+
+    public function testSetTargetDelegatesToSetIdleTimeout(): void
+    {
+        $this->voltTest->setTarget('20s');
+
+        $config = $this->getPrivateProperty($this->voltTest, 'config')->toArray();
+        $this->assertEquals('20s', $config['target']['idle_timeout']);
+    }
+
     public function testScenarioCreation(): void
     {
         $scenario = $this->voltTest->scenario('Login Flow', 'Test login functionality');

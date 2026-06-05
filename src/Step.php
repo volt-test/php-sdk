@@ -186,17 +186,19 @@ class Step
     public function extractFromRegex(string $variableName, string $selector): self
     {
         $regexExtractor = new RegexExtractor($variableName, $selector);
-        $regexExtractor->validate();
+        if (! $regexExtractor->validate()) {
+            throw new InvalidRegexException('Invalid regex selector or variable name');
+        }
         $this->extracts[] = $regexExtractor;
 
         return $this;
     }
 
-
     public function extractFromHtml(string $variableName, string $selector, ?string $attribute = null): self
     {
         $htmlExtractor = new HtmlExtractor($variableName, $selector, $attribute);
         $this->extracts[] = $htmlExtractor;
+
         return $this;
     }
 

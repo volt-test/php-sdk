@@ -59,14 +59,20 @@ class TestableProcessManager extends ProcessManager
         return $this->processCompleted;
     }
 
-    public function getWritternInput(): string
-    {
-        return $this->writtenInput;
-    }
-
     public function wereResourcesCleaned(): bool
     {
         return $this->resourcedCleaned;
+    }
+
+    public function executeCloud(array $config): string
+    {
+        $this->writtenInput = json_encode($config, JSON_PRETTY_PRINT);
+        $this->processStarted = true;
+        $this->processClosed = true;
+        $this->processCompleted = true;
+        $this->resourcedCleaned = true;
+
+        return $this->mockOutput;
     }
 
     protected function openProcess(): array

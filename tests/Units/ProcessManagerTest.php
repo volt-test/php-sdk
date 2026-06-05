@@ -140,12 +140,59 @@ class ProcessManagerTest extends TestCase
     {
         $this->processManager->setMockExitCode(1);
 
-        try {
-            $this->processManager->execute(['test' => true], false);
-        } catch (\RuntimeException $e) {
-            // Expected exception
-        }
+        $this->processManager->execute(['test' => true], false);
 
         $this->assertTrue($this->processManager->wereResourcesCleaned());
+    }
+
+    public function testNonZeroExitCodePreservesOutput(): void
+    {
+        $metricsOutput = <<<EOT
+Test Metrics Summary:
+===================
+Duration:     10.5s
+Total Reqs:   500
+Success Rate: 90.00%
+Req/sec:      47.62
+Success Requests: 450
+Failed Requests: 50
+EOT;
+
+        $this->processManager->setMockOutput($metricsOutput);
+        $this->processManager->setMockStderr('some error');
+        $this->processManager->setMockExitCode(1);
+
+        ob_start();
+        $output = $this->processManager->execute(['test' => true], false);
+        ob_end_clean();
+
+        $this->assertEquals($metricsOutput, $output);
+    }
+
+    public function testNonZeroExitCodePrintsStderr(): void
+    {
+        $this->processManager->setMockOutput('some output');
+        $this->processManager->setMockStderr('connection refused');
+        $this->processManager->setMockExitCode(1);
+
+        ob_start();
+        $this->processManager->execute(['test' => true], false);
+        $printed = ob_get_clean();
+
+        $this->assertStringContainsString('connection refused', $printed);
+    }
+
+    public function testNonZeroExitCodeNoStderrSkipsErrorMessage(): void
+    {
+        $this->processManager->setMockOutput('some output');
+        $this->processManager->setMockStderr('');
+        $this->processManager->setMockExitCode(1);
+
+        ob_start();
+        $output = $this->processManager->execute(['test' => true], false);
+        $printed = ob_get_clean();
+
+        $this->assertEquals('some output', $output);
+        $this->assertStringNotContainsString('Error:', $printed);
     }
 }
