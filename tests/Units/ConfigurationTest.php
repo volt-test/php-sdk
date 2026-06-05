@@ -218,6 +218,89 @@ class ConfigurationTest extends TestCase
         ];
     }
 
+    #[DataProvider('validTargetUrlProvider')]
+    public function testSetValidTargetUrl(string $url): void
+    {
+        $this->config->setTargetUrl($url);
+
+        $configArray = $this->config->toArray();
+        $this->assertEquals($url, $configArray['target']['url']);
+    }
+
+    public static function validTargetUrlProvider(): array
+    {
+        return [
+            ['https://example.com'],
+            ['http://localhost:8000'],
+            ['https://api.example.com'],
+            ['http://192.168.1.1:3000'],
+            ['https://sub.domain.example.com'],
+        ];
+    }
+
+    #[DataProvider('invalidTargetUrlSetProvider')]
+    public function testSetInvalidTargetUrlThrowsException(string $url): void
+    {
+        $this->expectException(VoltTestException::class);
+        $this->config->setTargetUrl($url);
+    }
+
+    public static function invalidTargetUrlSetProvider(): array
+    {
+        return [
+            [''],
+            ['not-a-url'],
+            ['ftp://example.com'],
+            ['example.com'],
+        ];
+    }
+
+    #[DataProvider('validIdleTimeoutProvider')]
+    public function testSetValidIdleTimeout(string $timeout): void
+    {
+        $this->config->setIdleTimeout($timeout);
+
+        $configArray = $this->config->toArray();
+        $this->assertEquals($timeout, $configArray['target']['idle_timeout']);
+    }
+
+    public static function validIdleTimeoutProvider(): array
+    {
+        return [
+            ['30s'],
+            ['1s'],
+            ['1m'],
+            ['60s'],
+            ['2h'],
+        ];
+    }
+
+    #[DataProvider('invalidIdleTimeoutProvider')]
+    public function testSetInvalidIdleTimeoutThrowsException(string $timeout): void
+    {
+        $this->expectException(VoltTestException::class);
+        $this->config->setIdleTimeout($timeout);
+    }
+
+    public static function invalidIdleTimeoutProvider(): array
+    {
+        return [
+            [''],
+            ['1'],
+            ['s'],
+            ['1x'],
+            ['30min'],
+        ];
+    }
+
+    public function testSetTargetDelegatesToSetIdleTimeout(): void
+    {
+        $this->config->setTarget('15s');
+
+        $configArray = $this->config->toArray();
+        $this->assertEquals('15s', $configArray['target']['idle_timeout']);
+    }
+
     public function testFluentInterface(): void
     {
         $result = $this->config

@@ -167,18 +167,44 @@ class VoltTest
     }
 
     /**
-     * Set the target URL and idle timeout
-     * @param string $idleTimeout Default is 30s (30 seconds) example: 1s (1 second), 1m (1 minute), 1h (1 hour)
+     * Set the target URL and idle timeout.
+     *
+     * @param string $url The base URL of the target (e.g. "https://api.example.com")
+     * @param string $idleTimeout Default is 30s. Example: 1s, 1m, 1h
+     * @return $this
      * @throws VoltTestException
      */
-    public function setTarget(string $idleTimeout): self
+    public function target(string $url, string $idleTimeout = '30s'): self
+    {
+        $this->config->setTargetUrl($url);
+        $this->config->setIdleTimeout($idleTimeout);
+
+        return $this;
+    }
+
+    /**
+     * Set the idle timeout for the target.
+     *
+     * @param string $idleTimeout Default is 30s. Example: 1s, 1m, 1h
+     * @return $this
+     * @throws VoltTestException
+     */
+    public function setIdleTimeout(string $idleTimeout): self
     {
         if (! preg_match('/^\d+[smh]$/', $idleTimeout)) {
             throw new VoltTestException('Invalid idle timeout format. Use <number>[s|m|h]');
         }
-        $this->config->setTarget($idleTimeout);
+        $this->config->setIdleTimeout($idleTimeout);
 
         return $this;
+    }
+
+    /**
+     * @deprecated Use target() or setIdleTimeout() instead
+     */
+    public function setTarget(string $idleTimeout): self
+    {
+        return $this->setIdleTimeout($idleTimeout);
     }
 
     /**

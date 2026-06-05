@@ -109,7 +109,21 @@ class Configuration
         return $this;
     }
 
-    public function setTarget(string $idleTimeout = '30s'): self
+    public function setTargetUrl(string $url): self
+    {
+        if (! preg_match('/^https?:\/\//', $url)) {
+            throw new VoltTestException('Target URL must start with http:// or https://');
+        }
+        $parsed = parse_url($url);
+        if ($parsed === false || ! isset($parsed['host'])) {
+            throw new VoltTestException('Invalid target URL');
+        }
+        $this->target['url'] = $url;
+
+        return $this;
+    }
+
+    public function setIdleTimeout(string $idleTimeout = '30s'): self
     {
         if (! preg_match('/^\d+[smh]$/', $idleTimeout)) {
             throw new VoltTestException('Invalid idle timeout format. Use <number>[s|m|h]');
@@ -117,6 +131,14 @@ class Configuration
         $this->target['idle_timeout'] = $idleTimeout;
 
         return $this;
+    }
+
+    /**
+     * @deprecated Use setIdleTimeout() instead
+     */
+    public function setTarget(string $idleTimeout = '30s'): self
+    {
+        return $this->setIdleTimeout($idleTimeout);
     }
 
     public function setHttpTimeout(string $httpTimeout): self
