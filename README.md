@@ -35,7 +35,7 @@ For detailed documentation, visit [https://php.volt-test.com](https://php.volt-t
 
 ## Requirements
 
-- PHP 8.0 or higher
+- PHP 8.2 or higher
 - ext-json
 - ext-pcntl
 - ext-curl
