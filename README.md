@@ -31,7 +31,7 @@ Accurate timing and metrics collection
 
 ## Documentation
 
-For detailed documentation, visit [https://php.volt-test.com](https://php.volt-test.com)
+For detailed documentation, visit [https://docs.volt-test.com](https://docs.volt-test.com)
 
 ## Requirements
 
