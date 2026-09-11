@@ -17,27 +17,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        php: [8.0 ,8.1 ,8.2, 8.3, 8.4]
+        php: ['8.2', '8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v4
 
-      # PHP installation and setup using built-in tools
-      - name: Setup PHP (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo add-apt-repository ppa:ondrej/php
-          sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-curl php8.2-mbstring
-          php -v
-        shell: bash
-
-      - name: Setup PHP (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install php@8.2
-          brew link php@8.2 --force
-          php -v
-        shell: bash
+      # PHP from the matrix (the previous hand-rolled apt/brew steps always installed 8.2,
+      # so the matrix versions were never actually exercised).
+      - name: Setup PHP ${{ matrix.php }}
+        if: matrix.os != 'windows-latest'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, curl, xml, openssl
+          tools: composer:v2
+          coverage: none
 
       - name: Setup PHP (Windows)
         if: matrix.os == 'windows-latest'
@@ -62,19 +55,6 @@ jobs:
           move composer.phar C:\tools\composer\composer
           echo "C:\tools\composer" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
-
-      - name: Install Composer (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-          sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-          php -r "unlink('composer-setup.php');"
-          sudo chmod +x /usr/local/bin/composer
-          mkdir -p ~/.composer
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo chown -R $USER:$USER ~/.composer
-          fi
-        shell: bash
 
       - name: Get Composer Cache Directory
         id: composer-cache

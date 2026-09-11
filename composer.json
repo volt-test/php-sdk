@@ -2,7 +2,7 @@
   "name": "volt-test/php-sdk",
   "description": "Volt Test PHP SDK - A performance testing tool for PHP Developers",
   "type": "library",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "keywords": [
     "volt-test",
     "php-sdk",
@@ -24,7 +24,7 @@
     }
   ],
   "require": {
-    "php": "^8.0",
+    "php": "^8.2",
     "ext-json": "*",
     "ext-curl": "*",
     "ext-pcntl": "*"

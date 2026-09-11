@@ -11,7 +11,7 @@ It combines PHP’s simplicity with Go’s speed and concurrency, allowing you t
 - [x] **Think Time & Ramp-Up Configuration** – Simulate real-user behavior.
 - [x] **Detailed Reports & Distributed Execution** – Scale tests and analyze results.
 - [x] **Debug Requests** - Inspect and troubleshoot request/response payloads easily.
-- [ ] **Cloud Execution** – Seamless cloud-based testing in progress.
+- [x] **Cloud Execution** – Seamless cloud-based testing.
 
 
 ## Architecture
@@ -35,7 +35,7 @@ For detailed documentation, visit [https://php.volt-test.com](https://php.volt-t
 
 ## Requirements
 
-- PHP 8.0 or higher
+- PHP 8.2 or higher
 - ext-json
 - ext-pcntl
 - ext-curl
