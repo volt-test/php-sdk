@@ -6,7 +6,7 @@ class Platform
 {
     private const BINARY_NAME = 'volt-test';
 
-    private const ENGINE_CURRENT_VERSION = 'v1.2.1';
+    private const ENGINE_CURRENT_VERSION = 'v1.2.2';
     private const BASE_DOWNLOAD_URL = 'https://github.com/volt-test/binaries/releases/download';
     private const SUPPORTED_PLATFORMS = [
         'linux-amd64' => 'volt-test-linux-amd64',
@@ -133,8 +133,6 @@ class Platform
 
             $fp = fopen($tempFile, 'w');
             if ($fp === false) {
-                curl_close($ch);
-
                 throw new \RuntimeException("Failed to open temporary file for writing");
             }
 
@@ -157,7 +155,8 @@ class Platform
                 throw new \RuntimeException("HTTP request failed with status $httpCode");
             }
 
-            curl_close($ch);
+            // curl_close() is a no-op since PHP 8.0 and deprecated in 8.5; the
+            // handle is released when $ch goes out of scope.
             fclose($fp);
 
             if (! file_exists($tempFile) || filesize($tempFile) === 0) {

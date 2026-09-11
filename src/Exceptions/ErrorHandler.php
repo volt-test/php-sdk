@@ -19,6 +19,12 @@ class ErrorHandler
 
     public static function handleError(int $errno, string $errstr, string $errfile, int $errline): bool
     {
+        // Deprecations (e.g. curl_close() on PHP 8.5) and errors silenced with @
+        // or excluded by error_reporting() must not abort a test run.
+        if (($errno & (E_DEPRECATED | E_USER_DEPRECATED)) !== 0 || (error_reporting() & $errno) === 0) {
+            return false;
+        }
+
         throw new \ErrorException(
             $errstr,
             $errno,
