@@ -44,4 +44,4 @@ For detailed documentation, visit [https://docs.volt-test.com](https://docs.volt
 
 The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
 
-For more examples and detailed documentation, visit [https://php.volt-test.com](https://php.volt-test.com)
+For more examples and detailed documentation, visit [https://docs.volt-test.com](https://docs.volt-test.com)
