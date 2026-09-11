@@ -11,7 +11,7 @@ It combines PHP’s simplicity with Go’s speed and concurrency, allowing you t
 - [x] **Think Time & Ramp-Up Configuration** – Simulate real-user behavior.
 - [x] **Detailed Reports & Distributed Execution** – Scale tests and analyze results.
 - [x] **Debug Requests** - Inspect and troubleshoot request/response payloads easily.
-- [x] **Cloud Execution** – Seamless cloud-based testing in progress.
+- [x] **Cloud Execution** – Seamless cloud-based testing.
 
 
 ## Architecture
