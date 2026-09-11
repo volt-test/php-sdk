@@ -12,7 +12,6 @@ class PlatformTest extends TestCase
         // Use the actual Platform logic to get vendor directories
         $reflection = new \ReflectionClass(Platform::class);
         $getVendorDirMethod = $reflection->getMethod('getVendorDir');
-        $getVendorDirMethod->setAccessible(true);
 
         $platform = new Platform();
         $vendorDir = $getVendorDirMethod->invoke($platform);
@@ -41,7 +40,6 @@ class PlatformTest extends TestCase
     {
         $reflection = new \ReflectionClass(Platform::class);
         $method = $reflection->getMethod('detectPlatform');
-        $method->setAccessible(true);
 
         $platform = new Platform();
         $result = $method->invoke($platform);
@@ -88,7 +86,6 @@ class PlatformTest extends TestCase
         // Get vendor directory
         $reflection = new \ReflectionClass(Platform::class);
         $getVendorDirMethod = $reflection->getMethod('getVendorDir');
-        $getVendorDirMethod->setAccessible(true);
 
         $platform = new Platform();
         $vendorDir = $getVendorDirMethod->invoke($platform);
@@ -130,7 +127,6 @@ class PlatformTest extends TestCase
     {
         $reflection = new \ReflectionClass(Platform::class);
         $vendorMethod = $reflection->getMethod('getVendorDir');
-        $vendorMethod->setAccessible(true);
 
         $platform = new Platform();
         $vendorDir = $vendorMethod->invoke($platform);

@@ -181,7 +181,6 @@ EOT;
     {
         $reflection = new \ReflectionClass(get_class($object));
         $property = $reflection->getProperty($propertyName);
-        $property->setAccessible(true);
         $property->setValue($object, $value);
     }
 
@@ -189,7 +188,6 @@ EOT;
     {
         $reflection = new \ReflectionClass(get_class($object));
         $property = $reflection->getProperty($propertyName);
-        $property->setAccessible(true);
 
         return $property->getValue($object);
     }
