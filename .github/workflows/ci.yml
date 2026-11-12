@@ -102,20 +102,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # setup-php instead of the ondrej PPA, which has no release for the
+      # Ubuntu 26.04 ubuntu-latest image.
       - name: Setup PHP
-        run: |
-          sudo add-apt-repository ppa:ondrej/php
-          sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
-        shell: bash
-
-      - name: Install Composer
-        run: |
-          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
-          sudo chmod +x /usr/local/bin/composer
-          mkdir -p ~/.composer
-          sudo chown -R $USER:$USER ~/.composer
-        shell: bash
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml
+          tools: composer:v2
+          coverage: none
 
       - name: Get Composer Cache Directory
         id: composer-cache
@@ -166,20 +161,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # setup-php instead of the ondrej PPA, which has no release for the
+      # Ubuntu 26.04 ubuntu-latest image.
       - name: Setup PHP
-        run: |
-          sudo add-apt-repository ppa:ondrej/php
-          sudo apt-get update
-          sudo apt-get install -y php8.2 php8.2-cli php8.2-xml php8.2-mbstring
-        shell: bash
-
-      - name: Install Composer
-        run: |
-          curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
-          sudo chmod +x /usr/local/bin/composer
-          mkdir -p ~/.composer
-          sudo chown -R $USER:$USER ~/.composer
-        shell: bash
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml
+          tools: composer:v2
+          coverage: none
 
       - name: Get Composer Cache Directory
         id: composer-cache
