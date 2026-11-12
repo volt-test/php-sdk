@@ -19,7 +19,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         php: ['8.2', '8.3', '8.4', '8.5']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # PHP from the matrix (the previous hand-rolled apt/brew steps always installed 8.2,
       # so the matrix versions were never actually exercised).
@@ -62,7 +62,7 @@ jobs:
         shell: bash
 
       - name: Cache Composer packages
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -85,7 +85,7 @@ jobs:
 
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.php }}
           path: |
@@ -100,7 +100,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # setup-php instead of the ondrej PPA, which has no release for the
       # Ubuntu 26.04 ubuntu-latest image.
@@ -117,7 +117,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: Cache Composer packages
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -159,7 +159,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # setup-php instead of the ondrej PPA, which has no release for the
       # Ubuntu 26.04 ubuntu-latest image.
@@ -176,7 +176,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: Cache Composer packages
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
